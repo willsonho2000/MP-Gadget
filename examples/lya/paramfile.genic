@@ -27,3 +27,5 @@ Seed = 181170    #  seed for IC-generator
 UnitLength_in_cm = 3.085678e21   # defines length unit of output (in cm/h) 
 UnitMass_in_g = 1.989e43      # defines mass unit of output (in g/cm)
 UnitVelocity_in_cm_per_s = 1e5 # defines velocity unit of output (in cm/sec)
+
+MaxMemSizePerNode              20000

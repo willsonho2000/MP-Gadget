@@ -34,6 +34,8 @@ DensityKernelType = cubic
 InitGasTemp = 270.
 MinGasTemp = 100
 
+MaxMemSizePerNode              20000
+
 #----------------------SFR Stuff-------------------------
 CritOverDensity = 1000   #  overdensity threshold for stars value in units of critical density.
 QuickLymanAlphaProbability = 1 # Set to 1.0 to turn dense gas directly into stars.
