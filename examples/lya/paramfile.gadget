@@ -7,7 +7,7 @@ OutputList = "0.02,0.1,0.192307692308,0.2,0.208333333333,0.217391304348,0.227272
 
 # CPU time -limit
 
-TimeLimitCPU = 43000 #= 8 hours
+TimeLimitCPU = 86400 #= 24 hours
 
 #  Characteristics of run
 TimeMax = 0.33333

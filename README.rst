@@ -45,6 +45,7 @@ First time users:
 
 .. code:: bash
 
+    pip install classy
     git clone https://github.com/MP-Gadget/MP-Gadget.git
     cd MP-Gadget
     make -j
