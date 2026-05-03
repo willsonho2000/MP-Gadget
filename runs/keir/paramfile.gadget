@@ -3,7 +3,8 @@
 InitCondFile = ICS/IC
 OutputDir = output
 TreeCoolFile = ../TREECOOL_ep_2018p
-OutputList = 0.05,0.1,0.11, 0.15, 0.2,0.299,0.3,0.33333,0.4,0.5,0.66666,0.75,0.9
+OutputList = 0.05,0.1,0.11, 0.15,0.166666, 0.17857, 0.1923, 0.2,0.299,0.3,0.33333,0.4,0.5,0.66666,0.75,0.9
+# Put z=4.2, 4.6, 5.0
 
 # CPU time -limit
 
@@ -16,10 +17,10 @@ SplitGravityTimestepsOn = 1
 
 TimeMax = 1.00000
 
-Omega0 = 0.2814      # Total matter density  (at z=0)
-OmegaLambda = 0.7186      # Cosmological constant (at z=0)
-OmegaBaryon = 0.0464     # Baryon density        (at z=0)
-HubbleParam = 0.697      # Hubble paramater (may be used for power spec parameterization)
+Omega0 = 0.3209          # Total matter density  (at z=0)
+OmegaLambda = 0.6791     # Cosmological constant (at z=0)
+OmegaBaryon = 0.0494     # Baryon density        (at z=0)
+HubbleParam = 0.669      # Hubble paramater (may be used for power spec parameterization)
 
 CoolingOn = 1
 StarformationOn = 1
