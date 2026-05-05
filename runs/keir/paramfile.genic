@@ -16,7 +16,7 @@ Redshift = 99        # Starting redshift
 
 DifferentTransferFunctions = 1
 #Tabulated output in Mpc/h units.
-FileWithInputSpectrum = ../class_pk_99.dat  # filename of tabulated input spectrum (if used)
+FileWithInputSpectrum = ../WDM_pk_99.dat  # filename of tabulated input spectrum (if used)
 FileWithTransferFunction = ../class_tk_99.dat  # filename of transfer functions for different species
 
                                     # Note: This can be chosen different from UnitLength_in_cm
@@ -31,4 +31,4 @@ UnitLength_in_cm = 3.085678e21   # defines length unit of output (in cm/h): 1 kp
 UnitMass_in_g = 1.989e43      # defines mass unit of output (in g/cm): 1e10 Msun
 UnitVelocity_in_cm_per_s = 1e5 # defines velocity unit of output (in cm/sec): 1 km/s
 
-#MaxMemSizePerNode              20000
+MaxMemSizePerNode              20000
