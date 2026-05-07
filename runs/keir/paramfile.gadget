@@ -2,7 +2,7 @@
 
 InitCondFile = ICS/IC
 OutputDir = output
-TreeCoolFile = ../TREECOOL_ep_2018p
+TreeCoolFile = ../TREECOOL_hm_2012
 OutputList = 0.05,0.1,0.11, 0.15,0.166666, 0.17857, 0.1923, 0.2,0.299,0.3,0.33333,0.4,0.5,0.66666,0.75,0.9
 # Put z=4.2, 4.6, 5.0
 
@@ -12,9 +12,7 @@ TimeLimitCPU = 100000 #= 24 hours
 SplitGravityTimestepsOn = 1
 
 # Code options
-
-#  Characteristics of run
-
+# Characteristics of run
 TimeMax = 1.00000
 
 Omega0 = 0.3209          # Total matter density  (at z=0)
@@ -24,53 +22,28 @@ HubbleParam = 0.669      # Hubble paramater (may be used for power spec paramete
 
 CoolingOn = 1
 StarformationOn = 1
-BlackHoleOn = 1
+BlackHoleOn = 0
 HydroOn = 1
-MetalReturnOn = 1
-DensityIndependentSphOn = 1
-StarformationCriterion = density,h2
+MetalReturnOn = 0
+DensityIndependentSphOn = 0
+DensityKernelType = cubic
+StarformationCriterion = density
 RadiationOn = 1
 MassiveNuLinRespOn = 0
-WindOn = 1
-MetalCoolFile = ../cooling_metal_UVB
+WindOn = 0
+#MetalCoolFile = ""
 
 SnapshotWithFOF = 1
 FOFHaloLinkingLength = 0.2
 FOFHaloMinLength = 32
 
-MinGasTemp = 5.0
-
 MaxMemSizePerNode = 20000
-
-#----------------------BH Stuff-------------------------
-BlackHoleKineticOn = 1 # switch to kinetic feedback mode when the BH accretion rate is low
-
-BlackHoleFeedbackFactor = 0.05
-BlackHoleFeedbackMethod = spline | mass
-SeedBlackHoleMass = 5.0e-5
-BlackHoleAccretionFactor = 100.0
-BlackHoleNgbFactor = 2.0
-BlackHoleEddingtonFactor = 3.0
-
-MinFoFMassForNewSeed = 1
-TimeBetweenSeedingSearch = 1.03
-WriteBlackHoleDetails = 1
 
 #----------------------SFR Stuff-------------------------
 
-CritPhysDensity = 0       #  critical physical density for star formation in
+CritPhysDensity = 1000       #  critical physical density for star formation in
 #  hydrogen number density in cm^(-3)
 
-CritOverDensity = 57.7   #  overdensity threshold value
-
-QuickLymanAlphaProbability = 0 # Set to 1.0 to turn dense gas directly into stars.
-
-WindModel = ofjt10,isotropic
-WindEfficiency = 2.0
-WindEnergyFraction = 1.0
-WindSigma0 = 353.0 #km/s
-WindSpeedFactor = 3.7
-
-WindFreeTravelLength = 20
-WindFreeTravelDensFac = 0.1
-
+QuickLymanAlphaProbability = 1
+# Set to 1.0 to turn dense gas directly into stars.
+WindModel = nowind
