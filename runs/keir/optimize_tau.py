@@ -55,7 +55,6 @@ best_chi2 = np.zeros_like(tau_0)
 
 # Run the three optimization processes for each redshift
 for i in range(3):
-    print(chi_2_pipeline(tau_0[i], i))
     res = minimize_scalar(chi_2_pipeline, bounds=(0.5, 2.5), args=(i))
     best_tau[i] = res.x
     best_chi2[i] = res.fun
