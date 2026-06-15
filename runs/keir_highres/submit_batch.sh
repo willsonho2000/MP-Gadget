@@ -1,9 +1,9 @@
 #!/bin/bash -l
 
-#SBATCH --partition=normal
-#SBATCH --nodes=1
-#SBATCH --ntasks=16
-#SBATCH --cpus-per-task=1
+#SBATCH --partition=nvdimm
+#SBATCH --nodes=2
+#SBATCH --ntasks=128
+#SBATCH --tasks-per-node=64
 #SBATCH --time=24:00:00     # 1 day
 #SBATCH --mail-user=mho101@ucr.edu
 #SBATCH --mail-type=ALL
@@ -19,8 +19,8 @@ module load ooops gsl
 
 # Job
 # ROOT=/rhome/mho101/MP-Gadget
-mpirun -np 1 ./MP-GenIC paramfile.genic
-mpirun ./MP-Gadget paramfile.gadget
+#mpirun ./MP-GenIC paramfile.genic
+mpirun ./MP-Gadget paramfile.gadget 1
 # mpirun -np 4 $ROOT/gadget/MP-Gadget paramfile.gadget || exit 1
 # python ./spectra.py
 
