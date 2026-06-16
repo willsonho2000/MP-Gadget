@@ -1,9 +1,8 @@
 #!/bin/bash -l
 
-#SBATCH --partition=nvdimm
-#SBATCH --nodes=2
-#SBATCH --ntasks=128
-#SBATCH --tasks-per-node=64
+#SBATCH --partition=normal
+#SBATCH --nodes=16
+#SBATCH --tasks-per-node=2
 #SBATCH --time=24:00:00     # 1 day
 #SBATCH --mail-user=mho101@ucr.edu
 #SBATCH --mail-type=ALL
@@ -17,12 +16,12 @@ date
 # module load samtools
 module load ooops gsl
 
+export OMP_NUM_THREADS=28
+
 # Job
 # ROOT=/rhome/mho101/MP-Gadget
-#mpirun ./MP-GenIC paramfile.genic
-mpirun ./MP-Gadget paramfile.gadget 1
-# mpirun -np 4 $ROOT/gadget/MP-Gadget paramfile.gadget || exit 1
-# python ./spectra.py
+#ibrun ./MP-GenIC paramfile.genic
+ibrun ./MP-Gadget paramfile.gadget
 
 # Print name of node
 hostname
