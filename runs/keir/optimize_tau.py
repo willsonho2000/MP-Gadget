@@ -20,10 +20,10 @@ data_power  = obser_data.pf.reshape(-1, kf.shape[0]) #km / s; n_z * n_k # n_z * 
 sigma_sq    = obser_data.covar_diag.reshape(-1, kf.shape[0])
 
 # Post analysis function to generate spectra with the given tau value and extract the flux power spectrum
-def post_analysis(i, tau):
+def post_analysis(i, tau, nspec):
     # To just spectra
-    gs = Spectra(i, "output", MPI=None, res=1.0, savefile="gridded_spectra.hdf5", cofm=None, axis=None)
-    fps = gs.get_flux_power_1D("H",1,mean_flux_desired=np.exp(-tau))     # get 1D flux power spectrum
+    gs = Spectra(i, "output", MPI=None, res=1.0, savefile="gridded_spectra_%03d.hdf5" % nspec, cofm=None, axis=None)
+    fps = gs.get_flux_power_1D("H",1,mean_flux_desired=np.exp(-tau), tau_thresh=1e6)     # get 1D flux power spectrum
     return fps
 
 # Do the chi2 analysis for the flux power spectrum
@@ -43,13 +43,13 @@ def chi_squared(i, sim):
 # Measure how good is the given tau value for each redshift
 def chi_2_pipeline(x, num_z):
     # Use the post_analysis function to generate spectra with the current tau value
-    fps = post_analysis(2 - num_z, tau=x)
+    fps = post_analysis(2 - num_z, tau=x, nspec=200)
 
     # chi2 analysis
     return chi_squared(num_z, fps)
 
 # Use the least squares method to find the best tau value that minimizes the chi2
-tau_0 = [0.944, 1.2377, 1.592 ]
+tau_0 = [0.944, 1.2377, 1.592]
 best_tau = np.zeros_like(tau_0)
 best_chi2 = np.zeros_like(tau_0)
 
