@@ -8,7 +8,6 @@ power spectrum from simulation snapshots via fake_spectra, and minimizes
 the chi-squared residual against the observed P_F(k).
 """
 
-# from fake_spectra.randspectra import RandSpectra
 from fake_spectra.spectra import Spectra
 
 from lyaemu import lyman_data
@@ -17,7 +16,6 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.optimize import minimize_scalar
 # Only if you want the MPI feature; otherwise, MPI is None by default
-# from mpi4py import MPI
 
 # ── Observational data ───────────────────────────────────────────────
 # Three target redshifts corresponding to Boera et al. measurements
