@@ -41,24 +41,19 @@ SCHEMA = [
     ("DifferentTransferFunctions", int, OPTIONAL, 1, "Use species specific transfer functions for baryon and CDM."),
     ("ScaleDepVelocity", int, OPTIONAL, -1, "Use scale dependent velocity transfer functions."),
     ("FileWithTransferFunction", str, OPTIONAL, "", "File containing CLASS formatted transfer functions."),
-    ("MaxMemSizePerNode", float, OPTIONAL, 0.6, "Ignored by the Python version."),
     ("CMBTemperature", float, OPTIONAL, 2.7255, "CMB temperature in K"),
     ("RadiationOn", float, OPTIONAL, 1, "Include radiation in the background."),
     ("UsePeculiarVelocity", int, OPTIONAL, 1, "If 0, v/sqrt(a) is saved in the ICs to match Gadget-2."),
     ("SavePrePos", int, OPTIONAL, 1, "Save the pre-displacement positions in the snapshot."),
     ("InvertPhase", int, OPTIONAL, 0, "Flip phase for paired simulation"),
     ("PrePosGridCenter", int, OPTIONAL, 0, "Set pre-displacement positions at the center of the grid"),
-    ("ShowBacktrace", int, OPTIONAL, 1, "Ignored by the Python version."),
-    ("PrimordialAmp", float, OPTIONAL, 2.215e-9, "Ignored."),
     ("Sigma8", float, OPTIONAL, -1, "Renormalise Sigma8 to this number if positive"),
     ("InputPowerRedshift", float, OPTIONAL, -1, "Redshift of the input power. Negative means the starting redshift."),
     ("PrimordialIndex", float, OPTIONAL, 0.971, "Tilting power, ignored for tabulated input."),
-    ("PrimordialRunning", float, OPTIONAL, 0, "Ignored."),
     ("UnitVelocity_in_cm_per_s", float, OPTIONAL, 1e5, "Velocity unit in cm/sec."),
     ("UnitLength_in_cm", float, OPTIONAL, CM_PER_MPC / 1000, "Length unit in cm."),
     ("UnitMass_in_g", float, OPTIONAL, 1.989e43, "Mass unit in g."),
     ("NumPartPerFile", int, OPTIONAL, 1024 * 1024 * 128, "Number of particles per striped bigfile."),
-    ("NumWriters", int, OPTIONAL, 0, "Ignored by the Python version."),
 ]
 
 _BLANKS = " \t\r\n="
@@ -172,7 +167,7 @@ def read_parameterfile(fname, verbose=True):
         powerp.ScaleDepVelocity = powerp.DifferentTransferFunctions
     powerp.WhichSpectrum = ps["WhichSpectrum"]
     powerp.PrimordialIndex = ps["PrimordialIndex"]
-    powerp.PrimordialRunning = ps["PrimordialRunning"]
+    # powerp.PrimordialRunning = ps["PrimordialRunning"]
     c.PowerP = powerp
 
     # Simulation parameters
