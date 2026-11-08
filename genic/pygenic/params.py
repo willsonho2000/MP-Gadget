@@ -12,7 +12,7 @@ SCHEMA = [
     ("FileWithInputSpectrum", str, REQUIRED, "", "File containing input power spectrum, from CLASS or CAMB."),
     ("OutputDir", str, REQUIRED, "", "Output directory in which to store the ICs"),
     ("FileBase", str, REQUIRED, "", "File name of the ICs."),
-    ("Omega0", float, REQUIRED, 0.2814, "Total matter density, cdm + baryons + massive neutrinos at z=0."),
+    ("Omega0", float, REQUIRED, 0.2814, "Total matter density, cdm + baryons at z=0."),
     ("OmegaBaryon", float, REQUIRED, 0.0464, "Omega Baryon."),
     ("OmegaLambda", float, REQUIRED, 0.7186, "Dark energy density at z=0"),
     ("HubbleParam", float, REQUIRED, 0.697, "Hubble parameter"),
@@ -22,7 +22,6 @@ SCHEMA = [
     ("Nmesh", int, OPTIONAL, 0, "Size of the FFT grid used to estimate displacements."),
     ("Ngrid", int, REQUIRED, 0, "Size of regular grid on which the undisplaced CDM particles are created."),
     ("NgridGas", int, OPTIONAL, -1, "Size of regular grid on which the undisplaced gas particles are created."),
-    ("NgridNu", int, OPTIONAL, 0, "Number of neutrino particles created for hybrid neutrinos."),
     ("Seed", int, REQUIRED, 0, "Random number generator seed for the phases of the Gaussian random field."),
     ("MakeGlassGas", int, OPTIONAL, -1, "Generate Glass IC for gas instead of Grid IC."),
     ("MakeGlassCDM", int, OPTIONAL, 0, "Generate Glass IC for CDM instead of Grid IC."),
@@ -31,13 +30,8 @@ SCHEMA = [
     ("Omega_fld", float, OPTIONAL, 0, "Energy density of dark energy fluid."),
     ("w0_fld", float, OPTIONAL, -1., "Dark energy equation of state"),
     ("wa_fld", float, OPTIONAL, 0, "Dark energy evolution parameter"),
-    ("Omega_ur", float, OPTIONAL, 0, "Extra radiation density, eg, a sterile neutrino"),
     ("CLASS_Radiation", int, OPTIONAL, 0, "If enabled, we enforce that sum(Omega_i) = 1."),
-    ("MNue", float, OPTIONAL, 0, "First neutrino mass in eV."),
-    ("MNum", float, OPTIONAL, 0, "Second neutrino mass in eV."),
-    ("MNut", float, OPTIONAL, 0, "Third neutrino mass in eV."),
     ("MWDM_therm", float, OPTIONAL, 0, "WDM particle mass in keV for thermal velocities."),
-    ("Max_nuvel", float, OPTIONAL, 5000, "Maximum neutrino velocity sampled from the F-D distribution."),
     ("DifferentTransferFunctions", int, OPTIONAL, 1, "Use species specific transfer functions for baryon and CDM."),
     ("ScaleDepVelocity", int, OPTIONAL, -1, "Use scale dependent velocity transfer functions."),
     ("FileWithTransferFunction", str, OPTIONAL, "", "File containing CLASS formatted transfer functions."),
@@ -131,11 +125,9 @@ def read_parameterfile(fname, verbose=True):
         Omega_fld=ps["Omega_fld"],
         w0_fld=ps["w0_fld"],
         wa_fld=ps["wa_fld"],
-        Omega_ur=ps["Omega_ur"],
         use_class_radiation_convention=ps["CLASS_Radiation"],
         CMBTemperature=ps["CMBTemperature"],
         RadiationOn=ps["RadiationOn"],
-        MNu=[ps["MNue"], ps["MNum"], ps["MNut"]],
     )
     if cp.OmegaLambda > 0 and cp.Omega_fld > 0:
         raise ValueError("Cannot have OmegaLambda and Omega_fld (evolving dark energy) at the same time!")
@@ -167,7 +159,6 @@ def read_parameterfile(fname, verbose=True):
         powerp.ScaleDepVelocity = powerp.DifferentTransferFunctions
     powerp.WhichSpectrum = ps["WhichSpectrum"]
     powerp.PrimordialIndex = ps["PrimordialIndex"]
-    # powerp.PrimordialRunning = ps["PrimordialRunning"]
     c.PowerP = powerp
 
     # Simulation parameters
@@ -182,12 +173,6 @@ def read_parameterfile(fname, verbose=True):
         c.NgridGas = c.Ngrid
     if not c.ProduceGas:
         c.NgridGas = 0
-    # Enable 'hybrid' neutrinos
-    c.NGridNu = ps["NgridNu"]
-    # Convert physical km/s at z=0 in an unperturbed universe to
-    # internal gadget (comoving) velocity units at starting redshift.
-    # (This matches the C code, which is only correct for UnitVelocity_in_cm_per_s = 1e5.)
-    c.Max_nuvel = ps["Max_nuvel"] * (1 + redshift) * (c.UnitVelocity_in_cm_per_s / 1e5)
     c.Seed = ps["Seed"]
     c.UnitaryAmplitude = ps["UnitaryAmplitude"]
     c.OutputDir = ps["OutputDir"]
@@ -203,18 +188,13 @@ def read_parameterfile(fname, verbose=True):
     numpartperfile = ps["NumPartPerFile"]
     c.NumFiles = (ngrid ** 3 + numpartperfile - 1) // numpartperfile
 
-    mnu_sum = sum(cp.MNu)
-    if powerp.DifferentTransferFunctions and powerp.InputPowerRedshift != redshift \
-            and (c.ProduceGas or mnu_sum):
+    if powerp.DifferentTransferFunctions and powerp.InputPowerRedshift != redshift and c.ProduceGas:
         message("WARNING: Using different transfer functions but also rescaling power "
                 "to account for linear growth. NOT what you want!")
-    if mnu_sum > 0 or powerp.DifferentTransferFunctions or powerp.ScaleDepVelocity:
+    if powerp.DifferentTransferFunctions or powerp.ScaleDepVelocity:
         if len(powerp.FileWithTransferFunction) == 0:
-            raise ValueError("For massive neutrinos, different transfer functions, or scale dependent "
+            raise ValueError("For different transfer functions or scale dependent "
                              "growth functions you must specify a transfer function file")
-    if not cp.RadiationOn and mnu_sum > 0:
-        raise ValueError("You want massive neutrinos but no background radiation: "
-                         "this will give an inconsistent cosmology.")
 
     if c.Nmesh == 0:
         c.Nmesh = 2 * ngrid

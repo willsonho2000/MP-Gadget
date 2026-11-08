@@ -11,22 +11,20 @@ from scipy.interpolate import CubicSpline
 
 from .physconst import CM_PER_MPC, LIGHTCGS, message
 
-# Transfer function types, matching enum TransferType in libgenic/power.h
+# Transfer function types: enum TransferType in libgenic/power.h, without the neutrino rows
 DELTA_BAR = 0
 DELTA_CDM = 1
-DELTA_NU = 2
-DELTA_CB = 3
-VEL_BAR = 4
-VEL_CDM = 5
-VEL_NU = 6
-VEL_CB = 7
-VEL_TOT = 8
+DELTA_CB = 2
+VEL_BAR = 3
+VEL_CDM = 4
+VEL_CB = 5
+VEL_TOT = 6
 # Always unity, so there is no column for it
-DELTA_TOT = 9
-MAXCOLS = 9
+DELTA_TOT = 7
+MAXCOLS = 7
 
-TNAMES = ["DELTA_BAR", "DELTA_CDM", "DELTA_NU", "DELTA_CB",
-          "VEL_BAR", "VEL_CDM", "VEL_NU", "VEL_CB", "VEL_TOT"]
+TNAMES = ["DELTA_BAR", "DELTA_CDM", "DELTA_CB",
+          "VEL_BAR", "VEL_CDM", "VEL_CB", "VEL_TOT"]
 
 NUGGET = 1e-30
 
@@ -117,11 +115,14 @@ class PowerSpectrum:
 
         Columns (1-indexed, entries in parentheses only present for a dark energy fluid):
         1:k (h/Mpc) 2:d_g 3:d_b 4:d_cdm (5:d_fld) 5:d_ur 6..:d_ncdm[i] d_tot phi psi h h_prime
-        eta eta_prime t_g t_b t_ur (t_fld) t_ncdm[i] t_tot"""
+        eta eta_prime t_g t_b t_ur (t_fld) t_ncdm[i] t_tot
+
+        The d_ncdm and t_ncdm columns are skipped; only their number is needed to locate
+        the other columns."""
         ncols = numcol - 1
         # Detect dark energy fluid perturbations.
         defld = 1 if numcol > 22 else 0
-        nnu = (ncols - 15 - defld * 2) // 2
+        nncdm = (ncols - 15 - defld * 2) // 2
         data = np.array([[float(x) for x in r[:numcol]] for r in rows])
         if data.shape[1] < numcol:
             raise ValueError("Incomplete line in transfer function. Did you remember to set "
@@ -132,22 +133,11 @@ class PowerSpectrum:
         # We use the formulae for velocities from fastpm in synchronous gauge:
         #  CDM = - h_prime / 2 / d_cdm
         #  bar = - (h_prime / 2  + t_b) / d_b
-        #  nu = - (h_prime / 2 + t_ncdm) / d_ncdm
         # (Ma & Bertschinger 1995 eq. 42, 66), with a normalisation of (1+z)/hubble applied later.
         out[DELTA_BAR] = -1 * transfers[:, 1]
         out[DELTA_CDM] = -1 * transfers[:, 2]
-        # Neutrino rows are the omega_nu weighted average over the massive species.
-        # NOTE: the C code assigns (=) instead of accumulating (+=) inside this loop, and reads
-        # t_ncdm one column early (t_ur for the first species). We use the intended weighted sum.
-        onu = self.CP.get_omega_nu(InitTime)
-        onu_single = [self.CP.ONu.omega_nu_single(InitTime, j) for j in range(nnu)]
-        for j in range(nnu):
-            out[DELTA_NU] += -1 * transfers[:, 4 + j + defld] * onu_single[j]
-            out[VEL_NU] += transfers[:, 14 + nnu + defld * 2 + j] * onu_single[j]
-        out[DELTA_NU] /= onu
-        out[VEL_NU] /= onu
-        out[VEL_BAR] = transfers[:, 12 + nnu + defld]
-        out[VEL_CDM] = transfers[:, 8 + nnu + defld] * 0.5
+        out[VEL_BAR] = transfers[:, 12 + nncdm + defld]
+        out[VEL_CDM] = transfers[:, 8 + nncdm + defld] * 0.5
         return logk, out
 
     def _init_transfer_table(self, InitTime, inputfile):
@@ -157,33 +147,23 @@ class PowerSpectrum:
             raise ValueError("Could not read transfer table at: '%s'" % inputfile)
         rows, numcol = _read_rows(inputfile)
         logk, t = self._parse_transfer(rows, numcol, InitTime)
-        nnu = sum(m > 0 for m in CP.MNu)
         # Normalise the velocity transfer functions: divide by a * hubble,
         # where hubble is the hubble function in Mpc^-1, so H0/c
         fac = InitTime * CP.hubble_function(InitTime) / CP.Hubble * 100 * CP.HubbleParam / (LIGHTCGS / 1e5)
-        onu = CP.get_omega_nu(InitTime) * InitTime ** 3
         # Now VEL_CDM is t_cdm
         t[VEL_CDM] /= fac
         t[VEL_BAR] /= fac
-        t[VEL_NU] /= fac
-        # Now change to t bar and tnu
+        # Now change to t bar
         t[VEL_BAR] += t[VEL_CDM]
-        t[VEL_NU] += t[VEL_CDM]
         # Set up the CDM + baryon rows
         t[DELTA_CB] = CP.OmegaBaryon * t[DELTA_BAR] + CP.OmegaCDM * t[DELTA_CDM]
         t[VEL_CB] = CP.OmegaBaryon * t[VEL_BAR] + CP.OmegaCDM * t[VEL_CDM]
-        # Total growth and delta: start as CDM + baryon and then add nu if needed.
-        t[VEL_TOT] = t[VEL_CB].copy()
-        T_tot = t[DELTA_CB].copy()
+        # The total matter is CDM + baryons.
         Omega0a3 = CP.OmegaBaryon + CP.OmegaCDM
         t[DELTA_CB] /= Omega0a3
         t[VEL_CB] /= Omega0a3
-        if nnu > 0:
-            t[VEL_TOT] += onu * t[VEL_NU]
-            T_tot += onu * t[DELTA_NU]
-            Omega0a3 += onu
-        t[VEL_TOT] /= Omega0a3
-        T_tot /= Omega0a3
+        t[VEL_TOT] = t[VEL_CB]
+        T_tot = t[DELTA_CB].copy()
         # Normalize growth_i and delta_i by delta_tot
         t /= T_tot
         self.transfer_logk = logk
@@ -191,7 +171,7 @@ class PowerSpectrum:
         self._transfer_splines = [CubicSpline(logk, t[i], bc_type="natural") for i in range(MAXCOLS)]
 
         sel = logk > self.power_logk[0]
-        meangrowth = t[VEL_BAR:VEL_TOT + 1, sel].mean(axis=1) if np.any(sel) else np.zeros(5)
+        meangrowth = t[VEL_BAR:VEL_TOT + 1, sel].mean(axis=1) if np.any(sel) else np.zeros(VEL_TOT + 1 - VEL_BAR)
         message("Scale-dependent growth calculated. Mean = %s" % " ".join("%g" % m for m in meangrowth))
         message("Power spectrum rows: %d, Transfer: %d (%g -> %g)"
                 % (len(self.power_logk), len(logk), t[DELTA_BAR][0], t[DELTA_BAR][-1]))

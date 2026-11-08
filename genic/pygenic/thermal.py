@@ -6,17 +6,8 @@ import numpy as np
 from scipy.integrate import quad
 from scipy.interpolate import CubicSpline
 
-from .physconst import LIGHTCGS
-
 MAX_FERMI_DIRAC = 17.0
 LENGTH_FERMI_DIRAC_TABLE = 2000
-
-
-def NU_V0(Time, kBTNubyMNu, UnitVelocity_in_cm_per_s):
-    """Velocity scale for neutrinos: v/c = x kT / (m a).
-
-    NOTE: this m is the mass of a SINGLE neutrino species, not the sum of neutrinos."""
-    return kBTNubyMNu / Time * (LIGHTCGS / UnitVelocity_in_cm_per_s)
 
 
 def WDM_V0(Time, WDM_therm_mass, Omega_CDM, HubbleParam, UnitVelocity_in_cm_per_s):
@@ -43,10 +34,6 @@ class ThermalVel:
         pieces = [quad(_fermi_dirac_kernel, vel[i], vel[i + 1], epsabs=0, epsrel=1e-6)[0]
                   for i in range(LENGTH_FERMI_DIRAC_TABLE - 1)]
         cumprob = np.concatenate([[0.], np.cumsum(pieces)])
-        total_fd = quad(_fermi_dirac_kernel, 0, MAX_FERMI_DIRAC, epsabs=0, epsrel=1e-6)[0]
-        assert total_fd > 1.8
-        # Fraction of the total F-D probability (3 zeta(3) / 2) that is below max_fd.
-        self.total_frac = cumprob[-1] / total_fd
         cumprob /= cumprob[-1]
         self.fermi_dirac_vel = vel
         self.fermi_dirac_cumprob = cumprob

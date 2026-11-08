@@ -42,8 +42,8 @@ def write_params(tmp_path, ngrid=16, box=64000., gas=0, which=1, pk="unused", re
 
 def make_cosmo(**kw):
     cp = SimpleNamespace(Omega0=0.3, OmegaLambda=0.7, OmegaBaryon=0.05, HubbleParam=0.7, Omega_fld=0,
-                         w0_fld=-1, wa_fld=0, Omega_ur=0, use_class_radiation_convention=0,
-                         CMBTemperature=2.7255, RadiationOn=0, MNu=[0, 0, 0])
+                         w0_fld=-1, wa_fld=0, use_class_radiation_convention=0,
+                         CMBTemperature=2.7255, RadiationOn=0)
     for key, value in kw.items():
         setattr(cp, key, value)
     return Cosmology(cp, 0.01, 3.085678e21, 1.989e43, 1e5)
@@ -79,7 +79,7 @@ def test_einstein_de_sitter_growth():
     cosmo = make_cosmo(Omega0=1.0, OmegaLambda=0.0, OmegaBaryon=0.0)
     assert cosmo.F_Omega(0.5) == pytest.approx(1.0, rel=1e-4)
     assert cosmo.GrowthFactor(0.25, 0.5) == pytest.approx(0.5, rel=1e-4)
-    # Massless neutrinos contribute Omega_nu(1) ~ 3e-5 even without radiation, as in the C code.
+    # The massless neutrino background contributes ~4e-5 even without radiation, as in the C code.
     assert cosmo.hubble_function(0.25) == pytest.approx(cosmo.Hubble * 8, rel=1e-5)
 
 
@@ -88,13 +88,6 @@ def test_lcdm_growth_rate():
     # f ~ Omega_m(a)^0.55 for LCDM
     omega_m = 0.3 / (0.3 + 0.7)
     assert cosmo.F_Omega(1.0) == pytest.approx(omega_m ** 0.55, rel=2e-2)
-
-
-def test_massive_neutrino_density():
-    cosmo = make_cosmo(MNu=[0.1, 0.1, 0.1], RadiationOn=1)
-    # Today the neutrinos are non-relativistic: Omega_nu h^2 ~ sum m_nu / 93.14 eV
-    assert cosmo.get_omega_nu(1) * 0.7 ** 2 == pytest.approx(0.3 / 93.14, rel=1e-2)
-    assert cosmo.ONu.nu_degeneracies == [3, 0, 0]
 
 
 def test_sigma8_normalisation():
@@ -107,7 +100,6 @@ def test_sigma8_normalisation():
 
 def test_thermal_velocity_distribution():
     therm = thermal.ThermalVel(1.0, 17.0, 0)
-    assert therm.total_frac == pytest.approx(1.0, abs=1e-5)
     vel = therm.add_thermal_speeds(np.random.default_rng(1), np.zeros((200000, 3)))
     # <v> for a relativistic Fermi-Dirac distribution is 7 pi^4 / (180 zeta(3)) ~ 3.15
     assert np.mean(np.linalg.norm(vel, axis=1)) == pytest.approx(7 * np.pi ** 4 / (180 * 1.2020569), rel=1e-2)
@@ -177,32 +169,32 @@ def test_end_to_end_power_and_velocities(tmp_path):
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(EXAMPLES, "neutrinos", "class_tk_nu_99.dat")),
                     reason="needs the example CLASS tables")
-def test_gas_glass_and_neutrinos(tmp_path):
+def test_gas_glass_and_transfer_functions(tmp_path):
     bigfile = pytest.importorskip("bigfile")
-    nudir = os.path.abspath(os.path.join(EXAMPLES, "neutrinos"))
-    extra = ("DifferentTransferFunctions = 1\nMakeGlassGas = 1\nNgridNu = 8\nRadiationOn = 1\n"
-             "MNue = 0.1\nMNum = 0.1\nMNut = 0.1\nFileWithTransferFunction = %s\n"
-             % os.path.join(nudir, "class_tk_nu_99.dat"))
+    # These CLASS tables have ncdm columns, which must be skipped.
+    tabdir = os.path.abspath(os.path.join(EXAMPLES, "neutrinos"))
+    extra = ("DifferentTransferFunctions = 1\nMakeGlassGas = 1\nRadiationOn = 1\n"
+             "FileWithTransferFunction = %s\n" % os.path.join(tabdir, "class_tk_nu_99.dat"))
     # The transfer functions are at z = 99
     pfile = write_params(tmp_path, ngrid=16, box=256000., gas=1, which=2, redshift=99,
-                         pk=os.path.join(nudir, "class_pk_nu_99.dat"), extra=extra)
+                         pk=os.path.join(tabdir, "class_pk_nu_99.dat"), extra=extra)
     outpath = generate(pfile, verbose=False)
     f = bigfile.File(outpath)
     header = f["Header"].attrs
-    assert list(header["TotNumPart"][:3]) == [16 ** 3, 16 ** 3, 8 ** 3]
-    assert 0 < header["FractionNuInParticles"][0] < 1
-    assert header["MassTable"][2] > 0
+    assert list(header["TotNumPart"]) == [16 ** 3, 16 ** 3, 0, 0, 0, 0]
+    assert header["MassTable"][2] == 0
     # IDs are unique across types
-    ids = np.concatenate([f["%d/ID" % t][:] for t in range(3)])
+    ids = np.concatenate([f["%d/ID" % t][:] for t in range(2)])
     assert len(np.unique(ids)) == len(ids)
-    # Neutrinos have large thermal velocities compared to the CDM
-    assert np.std(f["2/Velocity"][:]) > 10 * np.std(f["1/Velocity"][:])
     # Glass gas is not on a grid
     prepos = f["0/PrePosition"][:]
     cell = 256000. / 16
     assert np.std((prepos / cell) % 1) > 0.2
     assert f["ICTransfers"].attrs["Nentry"][0] > 0
-    assert np.all(np.isfinite(f["ICTransfers/%s" % "DELTA_NU"][:]))
+    for name in ("DELTA_BAR", "DELTA_CDM", "DELTA_CB", "VEL_BAR", "VEL_CDM", "VEL_CB", "VEL_TOT"):
+        assert np.all(np.isfinite(f["ICTransfers/%s" % name][:]))
+    # Baryons lag the CDM at z = 99 on small scales
+    assert f["ICTransfers/DELTA_BAR"][:][-1] < f["ICTransfers/DELTA_CDM"][:][-1]
 
 
 def test_wdm_paired_and_gadget_velocities(tmp_path):

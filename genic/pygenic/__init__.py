@@ -3,8 +3,7 @@
 The structure mirrors the C code:
 
   params.py     <- genic/params.c            (parameter file parsing)
-  cosmology.py  <- libgadget/cosmology.c,
-                   libgadget/omega_nu_single.c (background, growth, neutrino density)
+  cosmology.py  <- libgadget/cosmology.c      (background and growth)
   power.py      <- libgenic/power.c          (input power spectrum and transfer functions)
   thermal.py    <- libgenic/thermal.c        (Fermi-Dirac thermal velocities)
   mesh.py       <- libgadget/petapm.c        (CIC paint/readout and FFT helpers)

@@ -17,7 +17,7 @@ def create_file(path):
     return _bigfile().File(path, create=True)
 
 
-def compute_mass(TotNumPartCDM, TotNumPartGas, TotNuPart, nufrac, BoxSize, cosmo):
+def compute_mass(TotNumPartCDM, TotNumPartGas, BoxSize, cosmo):
     """Particle mass for each type, from the cosmology and the number of particles."""
     mass = np.zeros(6)
     OmegatoMass = cosmo.RhoCrit * BoxSize ** 3
@@ -25,30 +25,24 @@ def compute_mass(TotNumPartCDM, TotNumPartGas, TotNuPart, nufrac, BoxSize, cosmo
     if TotNumPartGas > 0:
         mass[0] = cosmo.OmegaBaryon * OmegatoMass / TotNumPartGas
         OmegaCDM -= cosmo.OmegaBaryon
-    if sum(cosmo.MNu) > 0:
-        OmegaNu = cosmo.get_omega_nu(1)
-        OmegaCDM -= OmegaNu
-        if TotNuPart > 0:
-            mass[2] = nufrac * OmegaNu * OmegatoMass / TotNuPart
     mass[1] = OmegaCDM * OmegatoMass / TotNumPartCDM
     return mass
 
 
-def saveheader(bf, TotNumPartCDM, TotNumPartGas, TotNuPart, nufrac, BoxSize, cosmo, config):
-    mass = compute_mass(TotNumPartCDM, TotNumPartGas, TotNuPart, nufrac, BoxSize, cosmo)
+def saveheader(bf, TotNumPartCDM, TotNumPartGas, BoxSize, cosmo, config):
+    """Write the header. Returns the particle masses."""
+    mass = compute_mass(TotNumPartCDM, TotNumPartGas, BoxSize, cosmo)
     attrs = {
-        "TotNumPart": np.array([TotNumPartGas, TotNumPartCDM, TotNuPart, 0, 0, 0], dtype="i8"),
+        "TotNumPart": np.array([TotNumPartGas, TotNumPartCDM, 0, 0, 0, 0], dtype="i8"),
         "MassTable": np.array(mass, dtype="f8"),
         "Time": np.float64(config.TimeIC),
         "Redshift": np.float64(1.0 / config.TimeIC - 1.),
         "BoxSize": np.float64(BoxSize),
         "UsePeculiarVelocity": np.int32(config.UsePeculiarVelocity),
         "Omega0": np.float64(cosmo.Omega0),
-        "FractionNuInParticles": np.float64(nufrac),
         "OmegaBaryon": np.float64(cosmo.OmegaBaryon),
         "OmegaLambda": np.float64(cosmo.OmegaLambda),
         "OmegaFld": np.float64(cosmo.Omega_fld),
-        "OmegaUR": np.float64(cosmo.Omega_ur),
         "OmegaK": np.float64(cosmo.OmegaK),
         "class_radiation_convention": np.int32(cosmo.use_class_radiation_convention),
         "W0_Fld": np.float64(cosmo.w0_fld),

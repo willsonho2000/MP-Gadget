@@ -10,7 +10,7 @@ from . import glass, save, thermal, zeldovich
 from .cosmology import Cosmology
 from .params import read_parameterfile
 from .physconst import CM_PER_MPC, message
-from .power import DELTA_BAR, DELTA_CB, DELTA_CDM, DELTA_NU, DELTA_TOT, PowerSpectrum
+from .power import DELTA_BAR, DELTA_CB, DELTA_CDM, DELTA_TOT, PowerSpectrum
 
 
 def glass_seed_hash(seed):
@@ -51,43 +51,22 @@ def generate(paramfile, verbose=True):
     meanspacing = config.BoxSize / max(config.Ngrid, config.NgridGas)
     shift_gas = -config.ProduceGas * 0.5 * (cosmo.Omega0 - cosmo.OmegaBaryon) / cosmo.Omega0 * meanspacing
     shift_dm = config.ProduceGas * 0.5 * cosmo.OmegaBaryon / cosmo.Omega0 * meanspacing
-    shift_nu = 0
-    if not config.ProduceGas and config.NGridNu > 0:
-        OmegaNu = cosmo.get_omega_nu(1)
-        shift_nu = -0.5 * (cosmo.Omega0 - OmegaNu) / cosmo.Omega0 * meanspacing
-        shift_dm = 0.5 * OmegaNu / cosmo.Omega0 * meanspacing
     if config.PrePosGridCenter:
         shift_dm += 0.5 * meanspacing
         shift_gas += 0.5 * meanspacing
-        shift_nu += 0.5 * meanspacing
 
     os.makedirs(config.OutputDir, exist_ok=True)
     outpath = os.path.join(config.OutputDir, config.InitCondFile)
     bf = save.create_file(outpath)
 
-    # Massive neutrinos
-    TotNu = config.NGridNu ** 3
-    total_nufrac = 0
-    nu_therm = None
-    if TotNu > 0:
-        kBMNu = 3 * cosmo.ONu.kBtnu / sum(cosmo.MNu)
-        v_th = thermal.NU_V0(config.TimeIC, kBMNu, config.UnitVelocity_in_cm_per_s)
-        if not config.UsePeculiarVelocity:
-            v_th /= np.sqrt(config.TimeIC)
-        nu_therm = thermal.ThermalVel(v_th, config.Max_nuvel / v_th, 0)
-        total_nufrac = nu_therm.total_frac
-        message("F-D velocity scale: %g. Max particle vel: %g. Fraction of mass in particles: %g"
-                % (v_th * np.sqrt(config.TimeIC), config.Max_nuvel * np.sqrt(config.TimeIC), total_nufrac))
-    save.saveheader(bf, TotNumPart, TotNumPartGas, TotNu, total_nufrac, config.BoxSize, cosmo, config)
+    mass = save.saveheader(bf, TotNumPart, TotNumPartGas, config.BoxSize, cosmo, config)
     save.save_all_transfer_tables(bf, power)
 
     # Use the 'total' (CDM + baryon) transfer function unless DifferentTransferFunctions are on.
-    DMType, GasType, NuType = DELTA_CB, DELTA_CB, DELTA_NU
+    DMType, GasType = DELTA_CB, DELTA_CB
     if config.ProduceGas and config.PowerP.DifferentTransferFunctions:
         DMType, GasType = DELTA_CDM, DELTA_BAR
 
-    # Neutrino mass can be neglected here since it only matters for the glass force.
-    mass = save.compute_mass(TotNumPart, TotNumPartGas, 0, 0, config.BoxSize, cosmo)
     idgen_cdm = zeldovich.ParticleGrid(config.Ngrid, config.BoxSize)
     idgen_gas = zeldovich.ParticleGrid(config.NgridGas, config.BoxSize)
 
@@ -122,7 +101,7 @@ def generate(paramfile, verbose=True):
         # Add a thermal velocity to WDM particles
         if config.WDM_therm_mass > 0:
             v_th = thermal.WDM_V0(config.TimeIC, config.WDM_therm_mass,
-                                  cosmo.Omega0 - cosmo.OmegaBaryon - cosmo.get_omega_nu(1),
+                                  cosmo.OmegaCDM,
                                   cosmo.HubbleParam, config.UnitVelocity_in_cm_per_s)
             if not config.UsePeculiarVelocity:
                 v_th /= np.sqrt(config.TimeIC)
@@ -135,15 +114,6 @@ def generate(paramfile, verbose=True):
         disp.displacement_fields(gas, GasType, power, cosmo, config)
         save.write_particle_data(bf, 0, gas, idgen_gas.ids(TotNumPart), config.SavePrePos, config.NumFiles)
     del gas
-
-    # Neutrino particles with random thermal velocities
-    if config.NGridNu > 0:
-        idgen_nu = zeldovich.ParticleGrid(config.NGridNu, config.BoxSize)
-        nu = zeldovich.setup_grid(idgen_nu, shift_nu, mass[2])
-        disp.displacement_fields(nu, NuType, power, cosmo, config)
-        nu_therm.add_thermal_speeds(np.random.default_rng(config.Seed + 2), nu.Vel)
-        save.write_particle_data(bf, 2, nu, idgen_nu.ids(TotNumPart + TotNumPartGas),
-                                 config.SavePrePos, config.NumFiles)
 
     bf.close()
     message("IC's generated in %.1f s." % (time.time() - start))
