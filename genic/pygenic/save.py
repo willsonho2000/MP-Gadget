@@ -38,7 +38,9 @@ def saveheader(bf, TotNumPartCDM, TotNumPartGas, BoxSize, cosmo, config):
         "Time": np.float64(config.TimeIC),
         "Redshift": np.float64(1.0 / config.TimeIC - 1.),
         "BoxSize": np.float64(BoxSize),
-        "UsePeculiarVelocity": np.int32(config.UsePeculiarVelocity),
+        # Velocities are always peculiar velocities. MP-Gadget reads this flag and
+        # assumes the Gadget-2 convention (v / sqrt(a)) if it is missing.
+        "UsePeculiarVelocity": np.int32(1),
         "Omega0": np.float64(cosmo.Omega0),
         "OmegaBaryon": np.float64(cosmo.OmegaBaryon),
         "OmegaLambda": np.float64(cosmo.OmegaLambda),
@@ -51,7 +53,6 @@ def saveheader(bf, TotNumPartCDM, TotNumPartGas, BoxSize, cosmo, config):
         "UnitMass_in_g": np.float64(config.UnitMass_in_g),
         "UnitVelocity_in_cm_per_s": np.float64(config.UnitVelocity_in_cm_per_s),
         "HubbleParam": np.float64(cosmo.HubbleParam),
-        "InvertPhase": np.int32(config.InvertPhase),
         "Seed": np.int64(config.Seed),
         "UnitaryAmplitude": np.int32(config.UnitaryAmplitude),
     }

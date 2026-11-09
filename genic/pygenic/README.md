@@ -55,6 +55,9 @@ Parameters that only matter to the C code (`MaxMemSizePerNode`, `NumWriters`,
 `ShowBacktrace`, `PrimordialAmp`, `PrimordialRunning`) and the neutrino parameters
 (`MNue`, `MNum`, `MNut`, `NgridNu`, `Max_nuvel`, `Omega_ur`) are not accepted: as for any
 unknown parameter, pygenic stops with an error, so remove them from the parameter file.
+The same goes for `InvertPhase` (no paired simulations) and `UsePeculiarVelocity`:
+velocities are always written as peculiar velocities `v = a dx/dt`, and the header
+says `UsePeculiarVelocity = 1` so that MP-Gadget reads them correctly.
 
 ## Differences from the C code
 

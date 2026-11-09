@@ -71,7 +71,7 @@ def generate(paramfile, verbose=True):
     idgen_gas = zeldovich.ParticleGrid(config.NgridGas, config.BoxSize)
 
     disp = zeldovich.DisplacementField(config.Nmesh, config.BoxSize, config.Seed,
-                                       config.UnitaryAmplitude, config.InvertPhase)
+                                       config.UnitaryAmplitude)
 
     # Unperturbed CDM particles
     if not config.MakeGlassCDM:
@@ -103,8 +103,6 @@ def generate(paramfile, verbose=True):
             v_th = thermal.WDM_V0(config.TimeIC, config.WDM_therm_mass,
                                   cosmo.OmegaCDM,
                                   cosmo.HubbleParam, config.UnitVelocity_in_cm_per_s)
-            if not config.UsePeculiarVelocity:
-                v_th /= np.sqrt(config.TimeIC)
             wdm = thermal.ThermalVel(v_th, 10000 / v_th, 0)
             wdm.add_thermal_speeds(np.random.default_rng(config.Seed + 1), cdm.Vel)
         save.write_particle_data(bf, 1, cdm, idgen_cdm.ids(0), config.SavePrePos, config.NumFiles)

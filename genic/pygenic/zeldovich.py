@@ -66,12 +66,11 @@ def setup_grid(idgen, shift, mass):
     return ICParticles(idgen.positions(shift), mass)
 
 
-def gaussian_fill(nmesh, seed, unitary_amplitude=True, invert_phase=False):
+def gaussian_fill(nmesh, seed, unitary_amplitude=True):
     """A complex Gaussian white noise field in Fourier space, with <|delta_k|^2> = 1.
 
     The field is the FFT of real-space white noise, so it is automatically Hermitian.
-    With unitary_amplitude every mode has |delta_k| = 1 ('fixed' simulations); with
-    invert_phase the sign is flipped ('paired' simulations).
+    With unitary_amplitude every mode has |delta_k| = 1 ('fixed' simulations).
 
     NOTE: the C code uses the N-GenIC GSL seed table, so the phases differ from MP-GenIC
     for the same seed. The statistics are identical."""
@@ -83,8 +82,6 @@ def gaussian_fill(nmesh, seed, unitary_amplitude=True, invert_phase=False):
         amp = np.abs(delta_k)
         amp[amp == 0] = 1
         delta_k /= amp
-    if invert_phase:
-        delta_k *= -1
     delta_k[0, 0, 0] = 0
     return delta_k
 
@@ -95,10 +92,10 @@ class DisplacementField:
     The white noise field is generated once and shared by all species, as in the C code
     (which regenerates the same field from the same seed for each species)."""
 
-    def __init__(self, nmesh, boxsize, seed, unitary_amplitude, invert_phase):
+    def __init__(self, nmesh, boxsize, seed, unitary_amplitude):
         self.nmesh = nmesh
         self.boxsize = boxsize
-        self.delta_k = gaussian_fill(nmesh, seed, unitary_amplitude, invert_phase)
+        self.delta_k = gaussian_fill(nmesh, seed, unitary_amplitude)
         kx, ky, kz = mesh.kgrid(nmesh)
         self.kint = (kx, ky, kz)
         k2 = kx ** 2 + ky ** 2 + kz ** 2
@@ -139,14 +136,9 @@ class DisplacementField:
         for d in range(3):
             icp.Disp[:, d] = self._to_particles(1j * self.kint[d] * kfac * amp * self.delta_k, pos)
 
-        # Velocity pre-factors
+        # Velocity pre-factor: the output is the peculiar velocity v = a dx/dt
         hubble_a = cosmo.hubble_function(config.TimeIC)
         vel_prefac = config.TimeIC * hubble_a
-        if config.UsePeculiarVelocity:
-            message("Producing Peculiar Velocity in the output.")
-        else:
-            # converts to Gadget velocity
-            vel_prefac /= np.sqrt(config.TimeIC)
 
         fom = cosmo.F_Omega(config.TimeIC)
         if config.PowerP.ScaleDepVelocity:

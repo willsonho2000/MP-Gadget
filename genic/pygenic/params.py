@@ -37,9 +37,7 @@ SCHEMA = [
     ("FileWithTransferFunction", str, OPTIONAL, "", "File containing CLASS formatted transfer functions."),
     ("CMBTemperature", float, OPTIONAL, 2.7255, "CMB temperature in K"),
     ("RadiationOn", float, OPTIONAL, 1, "Include radiation in the background."),
-    ("UsePeculiarVelocity", int, OPTIONAL, 1, "If 0, v/sqrt(a) is saved in the ICs to match Gadget-2."),
     ("SavePrePos", int, OPTIONAL, 1, "Save the pre-displacement positions in the snapshot."),
-    ("InvertPhase", int, OPTIONAL, 0, "Flip phase for paired simulation"),
     ("PrePosGridCenter", int, OPTIONAL, 0, "Set pre-displacement positions at the center of the grid"),
     ("Sigma8", float, OPTIONAL, -1, "Renormalise Sigma8 to this number if positive"),
     ("InputPowerRedshift", float, OPTIONAL, -1, "Redshift of the input power. Negative means the starting redshift."),
@@ -136,7 +134,6 @@ def read_parameterfile(fname, verbose=True):
     c = SimpleNamespace()
     c.WDM_therm_mass = ps["MWDM_therm"]
     c.ProduceGas = ps["ProduceGas"]
-    c.InvertPhase = ps["InvertPhase"]
     c.UnitVelocity_in_cm_per_s = ps["UnitVelocity_in_cm_per_s"]
     c.UnitLength_in_cm = ps["UnitLength_in_cm"]
     c.UnitMass_in_g = ps["UnitMass_in_g"]
@@ -162,7 +159,6 @@ def read_parameterfile(fname, verbose=True):
     c.PowerP = powerp
 
     # Simulation parameters
-    c.UsePeculiarVelocity = ps["UsePeculiarVelocity"]
     c.SavePrePos = ps["SavePrePos"]
     c.PrePosGridCenter = ps["PrePosGridCenter"]
     c.BoxSize = ps["BoxSize"]

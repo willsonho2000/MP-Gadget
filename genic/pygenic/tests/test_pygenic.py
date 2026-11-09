@@ -118,8 +118,6 @@ def test_cic_paint_readout():
 def test_gaussian_field():
     dk = zeldovich.gaussian_fill(16, 7, unitary_amplitude=True)
     assert np.allclose(np.abs(dk[1:, 1:, 1:]), 1)
-    dk2 = zeldovich.gaussian_fill(16, 7, unitary_amplitude=True, invert_phase=True)
-    assert np.allclose(dk, -dk2)
 
 
 def measure_power(pos, box, nmesh):
@@ -197,11 +195,11 @@ def test_gas_glass_and_transfer_functions(tmp_path):
     assert f["ICTransfers/DELTA_BAR"][:][-1] < f["ICTransfers/DELTA_CDM"][:][-1]
 
 
-def test_wdm_paired_and_gadget_velocities(tmp_path):
+def test_wdm_velocities_and_grid_center(tmp_path):
     bigfile = pytest.importorskip("bigfile")
-    base = "Sigma8 = 0.8\nUsePeculiarVelocity = 0\nPrePosGridCenter = 1\n"
+    base = "Sigma8 = 0.8\nPrePosGridCenter = 1\n"
     paths = []
-    for i, extra in enumerate(["", "InvertPhase = 1\n", "MWDM_therm = 0.1\n"]):
+    for i, extra in enumerate(["", "MWDM_therm = 0.1\n"]):
         sub = tmp_path / str(i)
         sub.mkdir()
         paths.append(generate(write_params(sub, ngrid=8, extra=base + extra), verbose=False))
@@ -212,9 +210,8 @@ def test_wdm_paired_and_gadget_velocities(tmp_path):
 
     def disp(f):
         return (f["1/Position"][:] - f["1/PrePosition"][:] + box / 2) % box - box / 2
-    # The paired simulation has the opposite displacements
-    assert np.allclose(disp(files[0]), -disp(files[1]), atol=1e-6 * box)
     # WDM thermal velocities are added on top of the same Zel'dovich velocities
-    extra = files[2]["1/Velocity"][:] - files[0]["1/Velocity"][:]
+    extra = files[1]["1/Velocity"][:] - files[0]["1/Velocity"][:]
     assert np.all(np.linalg.norm(extra, axis=1) > 0)
-    assert np.allclose(disp(files[0]), disp(files[2]))
+    assert np.allclose(disp(files[0]), disp(files[1]))
+    assert files[0]["Header"].attrs["UsePeculiarVelocity"][0] == 1
