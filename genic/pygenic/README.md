@@ -59,6 +59,46 @@ still works), `InvertPhase` (no paired simulations) and `UsePeculiarVelocity`:
 velocities are always written as peculiar velocities `v = a dx/dt`, and the header
 says `UsePeculiarVelocity = 1` so that MP-Gadget reads them correctly.
 
+## Baryon-CDM difference in the particle masses (`PerturbMass`)
+
+With gas and `DifferentTransferFunctions = 1`, baryons and CDM start with different
+density fields. `PerturbMass` chooses how that difference is set up:
+
+* `PerturbMass = 0` (default): each species is displaced with its own transfer function.
+  On two grids this couples the species spuriously, which is why the gas is a glass by
+  default.
+* `PerturbMass = 1`: the method of Hahn, Rampf & Uhlemann (2021, arXiv:2008.09124).
+  Both species are on grids and get the same displacement and velocity, those of the
+  total matter. The difference `delta_bc = delta_b - delta_cdm` at the unperturbed
+  position `q` goes into the particle masses, with `f_b = OmegaBaryon / Omega0` and
+  `f_c = 1 - f_b`:
+
+  ```
+  m_gas(q) = <m_gas> (1 + f_c delta_bc(q))
+  m_cdm(q) = <m_cdm> (1 - f_b delta_bc(q))
+  ```
+
+Each particle type then has a `Mass` block. `MassTable` in the header stays the mean
+mass, and the header has `PerturbMass = 1`.
+
+Things to know:
+
+* It needs `ProduceGas = 1`, `DifferentTransferFunctions = 1` and a tabulated spectrum,
+  and it is only available for grids: pygenic stops if a glass is requested.
+* **MP-Gadget does not read these masses yet.** Its IC reader sets every particle mass
+  from `MassTable` (`petaio_read_internal` in `libgadget/petaio.c`), so the baryon-CDM
+  difference is lost unless the reader is changed to use the `Mass` block.
+* `delta_bc` comes from the transfer functions at the starting redshift. The paper takes
+  it at a late reference time (a = 0.32) instead. There is no relative velocity
+  between the species, as in the paper's default.
+* `delta_bc` is limited to the modes the particle grid can represent before it is
+  sampled at the particles.
+* When measuring the power spectrum of these ICs, weight particles by `Mass`, and do
+  not use cloud-in-cell on a mesh only twice as fine as the particle grid: it responds
+  differently to masses and to displacements on a grid, which biases the gas-to-CDM
+  ratio by about 2% at half the particle Nyquist frequency. A mesh four times as
+  fine with a TSC kernel is accurate to about 0.1% there.
+
 ## Differences from the C code
 
 * **Random phases.** The C code draws the Gaussian field with the N-GenIC GSL seed
@@ -70,6 +110,7 @@ says `UsePeculiarVelocity = 1` so that MP-Gadget reads them correctly.
 * **No neutrinos.** pygenic has no massive neutrinos, so the header has no
   `FractionNuInParticles` or `OmegaUR`, and `ICTransfers` has no `DELTA_NU` or `VEL_NU`
   rows. The `ncdm` columns of a CLASS transfer file are skipped.
+* **`PerturbMass`.** The C code has no such option: it always perturbs positions.
 * **Header `Seed`.** The C code writes the 32-bit seed as an 8-byte integer, so the
   stored value has garbage in the upper bytes. pygenic stores the seed itself.
 

@@ -26,6 +26,8 @@ SCHEMA = [
     ("Seed", int, REQUIRED, 0, "Random number generator seed for the phases of the Gaussian random field."),
     ("MakeGlassGas", int, OPTIONAL, -1, "Generate Glass IC for gas instead of Grid IC."),
     ("MakeGlassCDM", int, OPTIONAL, 0, "Generate Glass IC for CDM instead of Grid IC."),
+    ("PerturbMass", int, OPTIONAL, 0, "If 1, put the baryon-CDM density difference in the particle masses, "
+                                      "not in separate displacements. Grids only."),
     ("UnitaryAmplitude", int, OPTIONAL, 1, "If 1, Fourier mode amplitudes are not scattered."),
     ("WhichSpectrum", int, OPTIONAL, 2, "Type of spectrum, 2 for file "),
     ("Omega_fld", float, OPTIONAL, 0, "Energy density of dark energy fluid."),
@@ -167,12 +169,19 @@ def read_parameterfile(fname, verbose=True):
     c.UnitaryAmplitude = ps["UnitaryAmplitude"]
     c.OutputDir = ps["OutputDir"]
     c.InitCondFile = ps["FileBase"]
+    c.PerturbMass = ps["PerturbMass"]
     c.MakeGlassGas = ps["MakeGlassGas"]
-    # Use a baryon glass by default if we have different transfer functions,
+    # Use a baryon glass by default if the species get different displacements,
     # since that is the way we reproduce the linear growth. Otherwise use a grid by default.
     if c.MakeGlassGas < 0:
-        c.MakeGlassGas = 1 if powerp.DifferentTransferFunctions else 0
+        c.MakeGlassGas = 1 if powerp.DifferentTransferFunctions and not c.PerturbMass else 0
     c.MakeGlassCDM = ps["MakeGlassCDM"]
+    if c.PerturbMass:
+        if not (c.ProduceGas and powerp.DifferentTransferFunctions and powerp.WhichSpectrum == 2):
+            raise ValueError("PerturbMass needs gas and tabulated transfer functions: set ProduceGas = 1, "
+                             "DifferentTransferFunctions = 1 and WhichSpectrum = 2")
+        if c.MakeGlassGas or c.MakeGlassCDM:
+            raise ValueError("PerturbMass is only available for grids: set MakeGlassGas = 0 and MakeGlassCDM = 0")
 
     ngrid = max(c.Ngrid, c.NgridGas)
     numpartperfile = ps["NumPartPerFile"]

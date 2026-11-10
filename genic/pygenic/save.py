@@ -46,6 +46,8 @@ def saveheader(bf, ncdm, ngas, cosmo, config):
         "HubbleParam": np.float64(cosmo.HubbleParam),
         "Seed": np.int64(config.Seed),
         "UnitaryAmplitude": np.int32(config.UnitaryAmplitude),
+        # If 1, each particle has its own mass in the Mass block, and MassTable is the mean.
+        "PerturbMass": np.int32(config.PerturbMass),
     }
     with bf.create("Header") as bheader:
         for key, value in attrs.items():
@@ -78,3 +80,5 @@ def write_particle_data(bf, ptype, icp, first_id, save_prepos, numfiles):
     save("Position", icp.Pos, "f8")
     save("Velocity", icp.Vel, "f4")
     save("ID", np.arange(first_id + 1, first_id + len(icp.Pos) + 1), "u8")
+    if icp.Mass is not None:
+        save("Mass", icp.Mass, "f4")

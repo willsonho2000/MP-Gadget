@@ -4,6 +4,7 @@ import numpy as np
 
 from . import mesh
 from .physconst import message
+from .power import DELTA_BAR, DELTA_CDM
 
 
 def grid_positions(ngrid, boxsize, shift=0.):
@@ -28,6 +29,8 @@ class ICParticles:
         self.PrePos = self.Pos.copy()
         self.Vel = np.zeros((len(pos), 3), dtype=np.float32)
         self.Density = np.zeros(len(pos), dtype=np.float32)
+        # Mass of each particle. None means all have the mass in the header.
+        self.Mass = None
 
 
 def gaussian_fill(nmesh, seed, unitary_amplitude=True):
@@ -73,6 +76,16 @@ class DisplacementField:
         field_k[0, 0, 0] = 0
         real = mesh.irfftn(field_k, self.nmesh) * self.nmesh ** 3
         return mesh.cic_readout(real, pos, self.boxsize)
+
+    def density_difference(self, pos, power, ngrid):
+        """The baryon - CDM density difference, delta_b - delta_cdm, at positions pos.
+
+        Only the modes that an ngrid^3 particle grid can represent are kept, so that
+        sampling the field at the particles does not alias smaller scales."""
+        amp = power.DeltaSpec(self.kmag, DELTA_BAR) - power.DeltaSpec(self.kmag, DELTA_CDM)
+        kx, ky, kz = self.kint
+        resolved = (np.abs(kx) < ngrid / 2) & (np.abs(ky) < ngrid / 2) & (np.abs(kz) < ngrid / 2)
+        return self._to_particles(self.delta_k * amp * resolved / np.sqrt(self.boxsize ** 3), pos)
 
     def displacement_fields(self, icp, ptype, power, cosmo, config):
         """Displace particles and set their velocities, as displacement_fields() in C.

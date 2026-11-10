@@ -113,9 +113,9 @@ def test_gaussian_field():
     assert np.allclose(np.abs(dk[1:, 1:, 1:]), 1)
 
 
-def measure_power(pos, box, nmesh):
+def measure_power(pos, box, nmesh, mass=1.0):
     """Power spectrum of particles, deconvolved for CIC, binned in integer k."""
-    rho = mesh.cic_paint(pos, 1.0, box, nmesh)
+    rho = mesh.cic_paint(pos, mass, box, nmesh)
     dk = mesh.rfftn(rho / rho.mean() - 1) / nmesh ** 3
     kx, ky, kz = mesh.kgrid(nmesh)
     window = (np.sinc(kx / nmesh) * np.sinc(ky / nmesh) * np.sinc(kz / nmesh)) ** 2
@@ -186,6 +186,58 @@ def test_gas_glass_and_transfer_functions(tmp_path):
         assert np.all(np.isfinite(f["ICTransfers/%s" % name][:]))
     # Baryons lag the CDM at z = 99 on small scales
     assert f["ICTransfers/DELTA_BAR"][:][-1] < f["ICTransfers/DELTA_CDM"][:][-1]
+
+
+def test_perturb_mass_parameters(tmp_path):
+    base = "DifferentTransferFunctions = 1\nFileWithTransferFunction = tk.dat\nPerturbMass = 1\n"
+    config, _ = params.read_parameterfile(write_params(tmp_path, gas=1, which=2, extra=base), verbose=False)
+    # With perturbed masses the gas is on a grid by default
+    assert config.PerturbMass == 1 and config.MakeGlassGas == 0
+    for bad in ("MakeGlassGas = 1\n", "MakeGlassCDM = 1\n", "DifferentTransferFunctions = 0\n", "ProduceGas = 0\n"):
+        with pytest.raises(ValueError):
+            params.read_parameterfile(write_params(tmp_path, gas=1, which=2, extra=base + bad), verbose=False)
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(EXAMPLES, "neutrinos", "class_tk_nu_99.dat")),
+                    reason="needs the example CLASS tables")
+def test_perturbed_masses(tmp_path):
+    bigfile = pytest.importorskip("bigfile")
+    tabdir = os.path.abspath(os.path.join(EXAMPLES, "neutrinos"))
+    box = 256000.
+    files = {}
+    # The same grids and phases, with the baryon-CDM difference in the masses or in the positions
+    for name, option in (("mass", "PerturbMass = 1"), ("position", "MakeGlassGas = 0")):
+        (tmp_path / name).mkdir()
+        extra = ("DifferentTransferFunctions = 1\nRadiationOn = 1\n%s\nFileWithTransferFunction = %s\n"
+                 % (option, os.path.join(tabdir, "class_tk_nu_99.dat")))
+        pfile = write_params(tmp_path / name, ngrid=16, box=box, gas=1, which=2, redshift=99,
+                             pk=os.path.join(tabdir, "class_pk_nu_99.dat"), extra=extra)
+        files[name] = bigfile.File(generate(pfile, verbose=False))
+    f = files["mass"]
+    header = f["Header"].attrs
+    assert header["PerturbMass"][0] == 1 and files["position"]["Header"].attrs["PerturbMass"][0] == 0
+    assert "0/Mass" not in files["position"].blocks
+    f_b = header["OmegaBaryon"][0] / header["Omega0"][0]
+    # Mass perturbations: zero mean, and in the ratio f_c : f_b for gas and CDM
+    dm_gas = f["0/Mass"][:] / header["MassTable"][0] - 1
+    dm_cdm = f["1/Mass"][:] / header["MassTable"][1] - 1
+    assert abs(dm_gas.mean()) < 1e-6 and abs(dm_cdm.mean()) < 1e-6
+    assert np.std(dm_gas) / np.std(dm_cdm) == pytest.approx((1 - f_b) / f_b, rel=2e-2)
+    # Both species are displaced by the same field (sampled on offset grids)
+    disp = [(f["%d/Position" % t][:] - f["%d/PrePosition" % t][:] + box / 2) % box - box / 2 for t in (0, 1)]
+    assert np.std(disp[0]) == pytest.approx(np.std(disp[1]), rel=1e-2)
+    # On large scales the mass weighted density of each species is the same as with perturbed positions
+    sel = slice(1, 5)
+    for t in (0, 1):
+        _, p_mass = measure_power(f["%d/Position" % t][:], box, 64, f["%d/Mass" % t][:])
+        _, p_pos = measure_power(files["position"]["%d/Position" % t][:], box, 64)
+        assert np.allclose(p_mass[sel] / p_pos[sel], 1, rtol=2e-2)
+    # ... and it is the masses that make the gas differ from the CDM
+    _, n_gas = measure_power(f["0/Position"][:], box, 64)
+    _, n_cdm = measure_power(f["1/Position"][:], box, 64)
+    _, p_gas = measure_power(f["0/Position"][:], box, 64, f["0/Mass"][:])
+    assert np.allclose(n_gas[sel] / n_cdm[sel], 1, rtol=5e-2)
+    assert np.all(np.abs(p_gas[sel] / n_gas[sel] - 1) > 0.1)
 
 
 def test_grid_center_and_header(tmp_path):

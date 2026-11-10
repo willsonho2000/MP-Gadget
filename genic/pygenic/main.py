@@ -63,9 +63,10 @@ def generate(paramfile, verbose=True):
     mass = save.saveheader(bf, ncdm, ngas, cosmo, config)
     save.save_all_transfer_tables(bf, power)
 
-    # Use the 'total' (CDM + baryon) transfer function unless DifferentTransferFunctions are on.
+    # Displace both species with the 'total' (CDM + baryon) transfer function,
+    # unless they have different transfer functions and we are not perturbing the masses.
     DMType, GasType = DELTA_CB, DELTA_CB
-    if config.ProduceGas and config.PowerP.DifferentTransferFunctions:
+    if config.ProduceGas and config.PowerP.DifferentTransferFunctions and not config.PerturbMass:
         DMType, GasType = DELTA_CDM, DELTA_BAR
 
     disp = zeldovich.DisplacementField(nmesh, box, config.Seed, config.UnitaryAmplitude)
@@ -87,12 +88,21 @@ def generate(paramfile, verbose=True):
             cdm_pos, gas_pos = pos[:ncdm], pos[ncdm:]
 
     # Displace the particles and write them. Gas IDs follow the CDM IDs.
+    # With PerturbMass both species follow the total matter, and their density difference
+    # delta_bc = delta_b - delta_cdm at the unperturbed positions goes into the masses:
+    # m_b = <m_b> (1 + f_c delta_bc) and m_c = <m_c> (1 - f_b delta_bc), with f_c = 1 - f_b.
+    # (Hahn, Rampf & Uhlemann 2021, arXiv:2008.09124, eq. 15)
+    f_b = cosmo.OmegaBaryon / cosmo.Omega0
     cdm = zeldovich.ICParticles(cdm_pos)
+    if config.PerturbMass:
+        cdm.Mass = mass[1] * (1 - f_b * disp.density_difference(cdm_pos, power, config.Ngrid))
     disp.displacement_fields(cdm, DMType, power, cosmo, config)
     save.write_particle_data(bf, 1, cdm, 0, config.SavePrePos, config.NumFiles)
 
     if config.ProduceGas:
         gas = zeldovich.ICParticles(gas_pos)
+        if config.PerturbMass:
+            gas.Mass = mass[0] * (1 + (1 - f_b) * disp.density_difference(gas_pos, power, config.NgridGas))
         disp.displacement_fields(gas, GasType, power, cosmo, config)
         save.write_particle_data(bf, 0, gas, ncdm, config.SavePrePos, config.NumFiles)
 
