@@ -3,7 +3,6 @@
 All functions take k in internal (inverse length) units and are vectorised over k."""
 
 import math
-import os
 
 import numpy as np
 from scipy.integrate import quad
@@ -29,24 +28,13 @@ TNAMES = ["DELTA_BAR", "DELTA_CDM", "DELTA_CB",
 NUGGET = 1e-30
 
 
-def _read_rows(inputfile):
-    """Read the non-comment rows of a whitespace-separated table.
-
-    Returns a list of lists of strings, and the number of columns in the first row."""
-    if not os.path.exists(inputfile):
-        raise IOError("can't read input spectrum in file '%s'" % inputfile)
-    rows = []
-    with open(inputfile) as fh:
-        for line in fh:
-            fields = line.split()
-            if not fields or fields[0].startswith("#"):
-                continue
-            rows.append(fields)
-    if len(rows) < 2:
+def _read_table(inputfile):
+    """Read a whitespace-separated table of numbers, skipping '#' comments."""
+    data = np.loadtxt(inputfile, comments="#", ndmin=2)
+    if len(data) < 2:
         raise ValueError("Input spectrum too short")
-    ncolumns = len(rows[0])
-    message("Detected %d columns in file '%s'." % (ncolumns, inputfile))
-    return rows, ncolumns
+    message("Detected %d columns in file '%s'." % (data.shape[1], inputfile))
+    return data
 
 
 class PowerSpectrum:
@@ -93,9 +81,8 @@ class PowerSpectrum:
     # ---------------------------------------------------------------- tables
     def _read_power_table(self, inputfile):
         """Read a matter power spectrum (k [h/Mpc], P [Mpc/h]^3), as parse_power()."""
-        rows, _ = _read_rows(inputfile)
-        k = np.array([float(r[0]) for r in rows])
-        p = np.array([float(r[1]) for r in rows])
+        data = _read_table(inputfile)
+        k, p = data[:, 0], data[:, 1]
         # If any k is negative, the file is (probably) in log10 units already.
         # The C code makes this decision on the first negative k it sees; we do the same.
         inlog = np.zeros(len(k), dtype=bool)
@@ -110,8 +97,8 @@ class PowerSpectrum:
         self.power_logD = logp / 2
         self._power_spline = CubicSpline(self.power_logk, self.power_logD, bc_type="natural")
 
-    def _parse_transfer(self, rows, numcol, InitTime):
-        """Read a CLASS transfer function file, as parse_transfer().
+    def _parse_transfer(self, data):
+        """Pick the columns we need from a CLASS transfer function table, as parse_transfer().
 
         Columns (1-indexed, entries in parentheses only present for a dark energy fluid):
         1:k (h/Mpc) 2:d_g 3:d_b 4:d_cdm (5:d_fld) 5:d_ur 6..:d_ncdm[i] d_tot phi psi h h_prime
@@ -119,13 +106,12 @@ class PowerSpectrum:
 
         The d_ncdm and t_ncdm columns are skipped; only their number is needed to locate
         the other columns."""
-        ncols = numcol - 1
+        ncols = data.shape[1] - 1
         # Detect dark energy fluid perturbations.
-        defld = 1 if numcol > 22 else 0
+        defld = 1 if ncols > 21 else 0
         nncdm = (ncols - 15 - defld * 2) // 2
-        data = np.array([[float(x) for x in r[:numcol]] for r in rows])
-        if data.shape[1] < numcol:
-            raise ValueError("Incomplete line in transfer function. Did you remember to set "
+        if nncdm < 0:
+            raise ValueError("Too few columns in transfer function. Did you remember to set "
                              "extra metric transfer functions=y?")
         logk = np.log10(data[:, 0])
         transfers = data[:, 1:]
@@ -143,10 +129,7 @@ class PowerSpectrum:
     def _init_transfer_table(self, InitTime, inputfile):
         """Read and normalise the transfer functions, as init_transfer_table()."""
         CP = self.CP
-        if len(inputfile) == 0:
-            raise ValueError("Could not read transfer table at: '%s'" % inputfile)
-        rows, numcol = _read_rows(inputfile)
-        logk, t = self._parse_transfer(rows, numcol, InitTime)
+        logk, t = self._parse_transfer(_read_table(inputfile))
         # Normalise the velocity transfer functions: divide by a * hubble,
         # where hubble is the hubble function in Mpc^-1, so H0/c
         fac = InitTime * CP.hubble_function(InitTime) / CP.Hubble * 100 * CP.HubbleParam / (LIGHTCGS / 1e5)

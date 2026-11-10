@@ -2,42 +2,33 @@
 
 import numpy as np
 
-from .power import DELTA_BAR, MAXCOLS, TNAMES
+from .power import TNAMES
 
 
-def _bigfile():
+def create_file(path):
     try:
         import bigfile
     except ImportError as err:  # pragma: no cover
         raise ImportError("The python 'bigfile' package is needed to write ICs: pip install bigfile") from err
-    return bigfile
+    return bigfile.File(path, create=True)
 
 
-def create_file(path):
-    return _bigfile().File(path, create=True)
-
-
-def compute_mass(TotNumPartCDM, TotNumPartGas, BoxSize, cosmo):
-    """Particle mass for each type, from the cosmology and the number of particles."""
+def saveheader(bf, ncdm, ngas, cosmo, config):
+    """Write the header for ncdm CDM and ngas gas particles. Returns the mass table."""
+    # Particle mass of each type: without gas, the CDM particles carry the baryons too.
     mass = np.zeros(6)
-    OmegatoMass = cosmo.RhoCrit * BoxSize ** 3
+    OmegatoMass = cosmo.RhoCrit * config.BoxSize ** 3
     OmegaCDM = cosmo.Omega0
-    if TotNumPartGas > 0:
-        mass[0] = cosmo.OmegaBaryon * OmegatoMass / TotNumPartGas
+    if ngas > 0:
+        mass[0] = cosmo.OmegaBaryon * OmegatoMass / ngas
         OmegaCDM -= cosmo.OmegaBaryon
-    mass[1] = OmegaCDM * OmegatoMass / TotNumPartCDM
-    return mass
-
-
-def saveheader(bf, TotNumPartCDM, TotNumPartGas, BoxSize, cosmo, config):
-    """Write the header. Returns the particle masses."""
-    mass = compute_mass(TotNumPartCDM, TotNumPartGas, BoxSize, cosmo)
+    mass[1] = OmegaCDM * OmegatoMass / ncdm
     attrs = {
-        "TotNumPart": np.array([TotNumPartGas, TotNumPartCDM, 0, 0, 0, 0], dtype="i8"),
-        "MassTable": np.array(mass, dtype="f8"),
+        "TotNumPart": np.array([ngas, ncdm, 0, 0, 0, 0], dtype="i8"),
+        "MassTable": mass,
         "Time": np.float64(config.TimeIC),
         "Redshift": np.float64(1.0 / config.TimeIC - 1.),
-        "BoxSize": np.float64(BoxSize),
+        "BoxSize": np.float64(config.BoxSize),
         # Velocities are always peculiar velocities. MP-Gadget reads this flag and
         # assumes the Gadget-2 convention (v / sqrt(a)) if it is missing.
         "UsePeculiarVelocity": np.int32(1),
@@ -73,14 +64,11 @@ def _save_transfer(bf, bname, logk, columns, colnames):
 def save_all_transfer_tables(bf, power):
     """Save the input power spectrum and the transfer function tables to the IC file."""
     _save_transfer(bf, "ICPower", power.power_logk, [power.power_logD], ["DELTA_MAT"])
-    transfer = power.transfer
-    if transfer.shape[1] == 0:
-        transfer = np.zeros((MAXCOLS, 0))
-    _save_transfer(bf, "ICTransfers", power.transfer_logk, transfer[DELTA_BAR:MAXCOLS], TNAMES)
+    _save_transfer(bf, "ICTransfers", power.transfer_logk, power.transfer, TNAMES)
 
 
-def write_particle_data(bf, ptype, icp, ids, save_prepos, numfiles):
-    """Write the particle arrays for one particle type."""
+def write_particle_data(bf, ptype, icp, first_id, save_prepos, numfiles):
+    """Write the particle arrays for one particle type. IDs count up from first_id + 1."""
     def save(name, array, dtype):
         bf.create_from_array("%d/%s" % (ptype, name), np.ascontiguousarray(array, dtype=dtype), Nfile=numfiles)
 
@@ -89,4 +77,4 @@ def write_particle_data(bf, ptype, icp, ids, save_prepos, numfiles):
     save("ICDensity", icp.Density, "f4")
     save("Position", icp.Pos, "f8")
     save("Velocity", icp.Vel, "f4")
-    save("ID", ids, "u8")
+    save("ID", np.arange(first_id + 1, first_id + len(icp.Pos) + 1), "u8")

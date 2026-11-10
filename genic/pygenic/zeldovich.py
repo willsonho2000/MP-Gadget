@@ -6,64 +6,28 @@ from . import mesh
 from .physconst import message
 
 
-class ParticleGrid:
-    """Positions and IDs of a regular Ngrid^3 lattice (the IDGenerator of the C code).
+def grid_positions(ngrid, boxsize, shift=0.):
+    """Positions of a regular ngrid^3 lattice, offset by shift.
 
-    Particles are ordered with x outermost and z innermost, so that particle i has
-    ID = i + 1 (plus a per-type offset) for any number of processors."""
-
-    def __init__(self, Ngrid, BoxSize):
-        self.Ngrid = Ngrid
-        self.BoxSize = BoxSize
-        self.NumPart = Ngrid ** 3
-
-    def positions(self, shift=0.):
-        idx = np.arange(self.Ngrid) * (self.BoxSize / self.Ngrid)
-        pos = np.empty((self.Ngrid,) * 3 + (3,))
-        pos[..., 0] = idx[:, None, None]
-        pos[..., 1] = idx[None, :, None]
-        pos[..., 2] = idx[None, None, :]
-        return pos.reshape(-1, 3) + shift
-
-    def ids(self, first_id=0):
-        return np.arange(1, self.NumPart + 1, dtype=np.uint64) + np.uint64(first_id)
+    Particles are ordered with x outermost and z innermost, as in the C code,
+    so that particle i gets ID = i + 1 (plus a per-type offset)."""
+    idx = np.arange(ngrid) * (boxsize / ngrid)
+    pos = np.empty((ngrid,) * 3 + (3,))
+    pos[..., 0] = idx[:, None, None]
+    pos[..., 1] = idx[None, :, None]
+    pos[..., 2] = idx[None, None, :]
+    return pos.reshape(-1, 3) + shift
 
 
 class ICParticles:
-    """Structure-of-arrays version of struct ic_part_data."""
+    """The particles of one species (struct ic_part_data in the C code)."""
 
-    def __init__(self, pos, mass):
-        n = len(pos)
+    def __init__(self, pos):
         self.Pos = np.array(pos, dtype=np.float64)
+        # Positions before the Zel'dovich displacement
         self.PrePos = self.Pos.copy()
-        self.Vel = np.zeros((n, 3), dtype=np.float32)
-        self.Disp = np.zeros((n, 3), dtype=np.float32)
-        self.Density = np.zeros(n, dtype=np.float32)
-        self.Mass = np.full(n, mass, dtype=np.float64)
-
-    def __len__(self):
-        return len(self.Pos)
-
-    @classmethod
-    def concatenate(cls, parts):
-        out = cls.__new__(cls)
-        for attr in ("Pos", "PrePos", "Vel", "Disp", "Density", "Mass"):
-            setattr(out, attr, np.concatenate([getattr(p, attr) for p in parts]))
-        return out
-
-    def split(self, n):
-        """Split into two particle sets, of the first n and remaining particles."""
-        first, second = (ICParticles.__new__(ICParticles) for _ in range(2))
-        for attr in ("Pos", "PrePos", "Vel", "Disp", "Density", "Mass"):
-            value = getattr(self, attr)
-            setattr(first, attr, value[:n])
-            setattr(second, attr, value[n:])
-        return first, second
-
-
-def setup_grid(idgen, shift, mass):
-    """Unperturbed particles on a regular lattice offset by shift."""
-    return ICParticles(idgen.positions(shift), mass)
+        self.Vel = np.zeros((len(pos), 3), dtype=np.float32)
+        self.Density = np.zeros(len(pos), dtype=np.float32)
 
 
 def gaussian_fill(nmesh, seed, unitary_amplitude=True):
@@ -131,10 +95,11 @@ class DisplacementField:
         fac = np.exp(-self.k2 / nmesh ** 2) * amp
         icp.Density[:] = self._to_particles(self.delta_k * fac, pos)
 
-        # Displacements: i k_axis / k^2 delta(k)
+        # Displacements: i k_axis / k^2 delta(k). Single precision, as in the C code.
         kfac = boxsize / (2 * np.pi) / self.k2
+        disp = np.empty((len(pos), 3), dtype=np.float32)
         for d in range(3):
-            icp.Disp[:, d] = self._to_particles(1j * self.kint[d] * kfac * amp * self.delta_k, pos)
+            disp[:, d] = self._to_particles(1j * self.kint[d] * kfac * amp * self.delta_k, pos)
 
         # Velocity pre-factor: the output is the peculiar velocity v = a dx/dt
         hubble_a = cosmo.hubble_function(config.TimeIC)
@@ -143,21 +108,20 @@ class DisplacementField:
         fom = cosmo.F_Omega(config.TimeIC)
         if config.PowerP.ScaleDepVelocity:
             growth = power.dlogGrowth(self.kmag, ptype) / vol_norm
-            vel = np.empty_like(icp.Disp)
+            vel = np.empty_like(disp)
             for d in range(3):
                 vel[:, d] = self._to_particles(1j * self.kint[d] * kfac * growth * self.delta_k, pos)
         else:
             vel_prefac *= fom
-            vel = icp.Disp
+            vel = disp
 
         icp.Vel[:] = vel * vel_prefac
-        icp.Pos += icp.Disp
+        icp.Pos += disp
         icp.Pos %= boxsize
 
-        maxdisp = float(np.max(icp.Disp)) if len(icp) else 0.
-        maxvel = float(np.max(np.sum(icp.Vel.astype(np.float64) ** 2, axis=1))) if len(icp) else 0.
+        maxdisp = float(np.max(disp))
+        maxvel = float(np.max(np.sum(icp.Vel.astype(np.float64) ** 2, axis=1)))
         message("Type = %d max disp = %g in units of cell sep %g"
                 % (ptype, maxdisp, maxdisp / (boxsize / nmesh)))
         message("Max vel=%g km/s, vel_prefac= %g  hubble_a=%g fom=%g"
                 % (np.sqrt(maxvel), vel_prefac, hubble_a, fom))
-        return icp

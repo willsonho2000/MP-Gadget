@@ -1,8 +1,9 @@
 """Parameter file parsing, following genic/params.c and libgadget/utils/paramset.c."""
 
+import re
 from types import SimpleNamespace
 
-from .physconst import CM_PER_MPC, HUBBLE, message
+from .physconst import CM_PER_MPC, message
 
 REQUIRED = True
 OPTIONAL = False
@@ -49,6 +50,8 @@ SCHEMA = [
 
 _BLANKS = " \t\r\n="
 _COMMENTS = "%#"
+# A name, then blanks or '=', then the value up to a comment
+_LINE = re.compile(r"([^ \t\r\n=]+)[ \t\r\n=]*([^%#]*)")
 
 
 def _convert(typ, value):
@@ -70,17 +73,10 @@ def parse_parameter_text(text):
         stripped = line.lstrip(_BLANKS)
         if not stripped or stripped[0] in _COMMENTS:
             continue
-        i = 0
-        while i < len(stripped) and stripped[i] not in _BLANKS:
-            i += 1
-        name = stripped[:i]
-        rest = stripped[i:].lstrip(_BLANKS)
-        if not rest or rest[0] in _COMMENTS:
+        name, value = _LINE.match(stripped).groups()
+        if not value:
             raise ValueError("Line %d : `%s` is malformed." % (lineno, line))
-        j = 0
-        while j < len(rest) and rest[j] not in _COMMENTS:
-            j += 1
-        raw[name] = rest[:j].strip()
+        raw[name] = value.strip()
     return raw
 
 
@@ -193,6 +189,4 @@ def read_parameterfile(fname, verbose=True):
     if c.Nmesh == 0:
         c.Nmesh = 2 * ngrid
     c.TimeIC = 1 / (1 + redshift)
-    unit_time_in_s = c.UnitLength_in_cm / c.UnitVelocity_in_cm_per_s
-    cp.Hubble = HUBBLE * unit_time_in_s
     return c, cp

@@ -7,7 +7,7 @@ import numpy as np
 
 from . import mesh
 from .physconst import message
-from .zeldovich import ICParticles
+from .zeldovich import grid_positions
 
 
 def _diff_kernel(w):
@@ -17,70 +17,61 @@ def _diff_kernel(w):
     return 1 / 6.0 * (8 * np.sin(w) - np.sin(2 * w))
 
 
-def glass_force(nmesh, boxsize, icp):
-    """Compute the inverted-gravity force on each particle and store it in icp.Disp.
+def glass_force(nmesh, boxsize, pos, mass):
+    """The inverted-gravity force on each particle.
 
     pot(k) = delta(k) / k^2, force = -grad pot. In these units the oscillation
     period of a perturbation is 2 pi."""
-    rho = mesh.cic_paint(icp.Pos, icp.Mass, boxsize, nmesh)
-    totmass = np.sum(icp.Mass)
-    # Overdensity in Fourier space (the mean mass per cell is totmass / nmesh^3)
-    delta_k = mesh.rfftn(rho) * (nmesh ** 3 / totmass)
-    del rho
+    rho = mesh.cic_paint(pos, mass, boxsize, nmesh)
+    # Overdensity in Fourier space (the mean mass per cell is the total mass / nmesh^3)
+    delta_k = mesh.rfftn(rho) * (nmesh ** 3 / np.sum(mass))
     kx, ky, kz = mesh.kgrid(nmesh)
     k2 = (kx ** 2 + ky ** 2 + kz ** 2) * (2 * np.pi / boxsize) ** 2
     k2[0, 0, 0] = 1
     pot_k = delta_k / k2
     pot_k[0, 0, 0] = 0
-    del delta_k, k2
+    # Single precision, as in the C code
+    force = np.empty((len(pos), 3), dtype=np.float32)
     for d, kint in enumerate((kx, ky, kz)):
         fac = -1 * _diff_kernel(kint * (2 * np.pi / nmesh)) * (nmesh / boxsize)
-        force = mesh.irfftn(1j * fac * pot_k, nmesh)
-        icp.Disp[:, d] = mesh.cic_readout(force, icp.Pos, boxsize)
+        force[:, d] = mesh.cic_readout(mesh.irfftn(1j * fac * pot_k, nmesh), pos, boxsize)
+    return force
 
 
-def _glass_stats(icp):
-    n = len(icp)
-    disp2 = np.sum(icp.Disp.astype(np.float64) ** 2)
-    vel2 = np.sum(icp.Vel.astype(np.float64) ** 2)
-    message("Force std = %g, vel std = %g" % (np.sqrt(disp2 / n), np.sqrt(vel2 / n)))
-
-
-def glass_evolve(nmesh, boxsize, nsteps, icp):
+def glass_evolve(nmesh, boxsize, pos, mass, nsteps=14):
     """Leap-frog (K D F K) evolution with inverted gravity and damping.
+
+    pos are the starting positions and mass the mass of each particle.
+    Returns the evolved positions.
 
     With dt = pi / 2 there are 4 steps per oscillation, and 14 steps end close to a minimum.
     The setup was studied in
     https://github.com/rainwoodman/fastpm-python/blob/1be020b/Example/Glass.ipynb"""
-    t_x = 0.
-    glass_force(nmesh, boxsize, icp)
+    pos = np.array(pos, dtype=np.float64)
+    vel = np.zeros((len(pos), 3), dtype=np.float32)
+    force = glass_force(nmesh, boxsize, pos, mass)
     dt = np.pi / 2
     hdt = 0.5 * dt
     for step in range(nsteps):
         # Kick, minding the damping term
-        icp.Vel += (icp.Disp - icp.Vel) * hdt
-        t_x += hdt
+        vel += (force - vel) * hdt
         # Drift
-        icp.Pos += icp.Vel * dt
-        icp.Pos %= boxsize
-        glass_force(nmesh, boxsize, icp)
-        t_f = t_x
+        pos += vel * dt
+        pos %= boxsize
+        force = glass_force(nmesh, boxsize, pos, mass)
         # Kick
-        icp.Vel += (icp.Disp - icp.Vel) * hdt
-        t_x += hdt
-        message("Generating glass, step = %d, t_f= %g, t_x = %g" % (step, t_f / (2 * np.pi), t_x / (2 * np.pi)))
-        _glass_stats(icp)
-    icp.Vel[:] = 0
-    icp.Disp[:] = 0
-    return icp
+        vel += (force - vel) * hdt
+        message("Generating glass, step = %d, force std = %g, vel std = %g"
+                % (step, np.sqrt(np.sum(force.astype(np.float64) ** 2) / len(pos)),
+                   np.sqrt(np.sum(vel.astype(np.float64) ** 2) / len(pos))))
+    return pos
 
 
-def setup_glass(idgen, nmesh, seed, mass):
-    """A glass with the same number of particles as idgen's grid."""
+def setup_glass(ngrid, boxsize, nmesh, seed, mass):
+    """Positions of a glass of ngrid^3 particles, each with the given mass."""
     rng = np.random.default_rng(seed)
-    pos = idgen.positions(0)
+    pos = grid_positions(ngrid, boxsize)
     # A spread of 3 cells kills most of the grid anisotropy structure, while still being local.
-    pos += idgen.BoxSize / idgen.Ngrid * 3 * (rng.uniform(size=pos.shape) - 0.5)
-    pos %= idgen.BoxSize
-    icp = ICParticles(pos, mass)
-    return glass_evolve(nmesh, idgen.BoxSize, 14, icp)
+    pos += boxsize / ngrid * 3 * (rng.uniform(size=pos.shape) - 0.5)
+    pos %= boxsize
+    return glass_evolve(nmesh, boxsize, pos, np.full(len(pos), mass))

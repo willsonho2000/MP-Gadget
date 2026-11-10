@@ -44,11 +44,12 @@ def generate(paramfile, verbose=True):
                       config.UnitVelocity_in_cm_per_s)
     power = PowerSpectrum(config.TimeIC, config.UnitLength_in_cm, cosmo, config.PowerP)
 
-    TotNumPart = config.Ngrid ** 3
-    TotNumPartGas = config.ProduceGas * config.NgridGas ** 3
+    box, nmesh = config.BoxSize, config.Nmesh
+    ncdm = config.Ngrid ** 3
+    ngas = config.ProduceGas * config.NgridGas ** 3
 
     # Offset the species so particles do not sit on top of each other.
-    meanspacing = config.BoxSize / max(config.Ngrid, config.NgridGas)
+    meanspacing = box / max(config.Ngrid, config.NgridGas)
     shift_gas = -config.ProduceGas * 0.5 * (cosmo.Omega0 - cosmo.OmegaBaryon) / cosmo.Omega0 * meanspacing
     shift_dm = config.ProduceGas * 0.5 * cosmo.OmegaBaryon / cosmo.Omega0 * meanspacing
     if config.PrePosGridCenter:
@@ -59,7 +60,7 @@ def generate(paramfile, verbose=True):
     outpath = os.path.join(config.OutputDir, config.InitCondFile)
     bf = save.create_file(outpath)
 
-    mass = save.saveheader(bf, TotNumPart, TotNumPartGas, config.BoxSize, cosmo, config)
+    mass = save.saveheader(bf, ncdm, ngas, cosmo, config)
     save.save_all_transfer_tables(bf, power)
 
     # Use the 'total' (CDM + baryon) transfer function unless DifferentTransferFunctions are on.
@@ -67,44 +68,33 @@ def generate(paramfile, verbose=True):
     if config.ProduceGas and config.PowerP.DifferentTransferFunctions:
         DMType, GasType = DELTA_CDM, DELTA_BAR
 
-    idgen_cdm = zeldovich.ParticleGrid(config.Ngrid, config.BoxSize)
-    idgen_gas = zeldovich.ParticleGrid(config.NgridGas, config.BoxSize)
+    disp = zeldovich.DisplacementField(nmesh, box, config.Seed, config.UnitaryAmplitude)
 
-    disp = zeldovich.DisplacementField(config.Nmesh, config.BoxSize, config.Seed,
-                                       config.UnitaryAmplitude)
-
-    # Unperturbed CDM particles
-    if not config.MakeGlassCDM:
-        cdm = zeldovich.setup_grid(idgen_cdm, shift_dm, mass[1])
+    # Unperturbed positions of each species: a grid or a glass
+    if config.MakeGlassCDM:
+        cdm_pos = glass.setup_glass(config.Ngrid, box, nmesh, glass_seed_hash(config.Seed), mass[1])
     else:
-        cdm = glass.setup_glass(idgen_cdm, config.Nmesh, glass_seed_hash(config.Seed), mass[1])
-
-    gas = None
+        cdm_pos = zeldovich.grid_positions(config.Ngrid, box, shift_dm)
     if config.ProduceGas:
-        if not config.MakeGlassGas:
-            gas = zeldovich.setup_grid(idgen_gas, shift_gas, mass[0])
+        if config.MakeGlassGas:
+            gas_pos = glass.setup_glass(config.NgridGas, box, nmesh, glass_seed_hash(config.Seed + 1), mass[0])
         else:
-            gas = glass.setup_glass(idgen_gas, config.Nmesh, glass_seed_hash(config.Seed + 1), mass[0])
+            gas_pos = zeldovich.grid_positions(config.NgridGas, box, shift_gas)
         # Coherent glass evolution of both species, to avoid close pairs
         if config.MakeGlassGas or config.MakeGlassCDM:
-            both = zeldovich.ICParticles.concatenate([cdm, gas])
-            glass.glass_evolve(config.Nmesh, config.BoxSize, 14, both)
-            cdm, gas = both.split(len(cdm))
+            pos = glass.glass_evolve(nmesh, box, np.concatenate([cdm_pos, gas_pos]),
+                                     np.repeat([mass[1], mass[0]], [ncdm, ngas]))
+            cdm_pos, gas_pos = pos[:ncdm], pos[ncdm:]
 
-    # Pre-displacement positions
-    for icp in (cdm, gas):
-        if icp is not None:
-            icp.PrePos[:] = icp.Pos
-
-    if len(cdm) > 0:
-        disp.displacement_fields(cdm, DMType, power, cosmo, config)
-        save.write_particle_data(bf, 1, cdm, idgen_cdm.ids(0), config.SavePrePos, config.NumFiles)
-    del cdm
+    # Displace the particles and write them. Gas IDs follow the CDM IDs.
+    cdm = zeldovich.ICParticles(cdm_pos)
+    disp.displacement_fields(cdm, DMType, power, cosmo, config)
+    save.write_particle_data(bf, 1, cdm, 0, config.SavePrePos, config.NumFiles)
 
     if config.ProduceGas:
+        gas = zeldovich.ICParticles(gas_pos)
         disp.displacement_fields(gas, GasType, power, cosmo, config)
-        save.write_particle_data(bf, 0, gas, idgen_gas.ids(TotNumPart), config.SavePrePos, config.NumFiles)
-    del gas
+        save.write_particle_data(bf, 0, gas, ncdm, config.SavePrePos, config.NumFiles)
 
     bf.close()
     message("IC's generated in %.1f s." % (time.time() - start))
