@@ -47,22 +47,22 @@ The steps are the same as in `genic/main.c`:
    displacement field, which is CIC-interpolated to the particles. Velocities are
    `a H(a) f psi`, with either the scale-independent `f = dlnD/dlna` or the scale-dependent
    growth rate from the transfer functions (`zeldovich.py`).
-5. Add Fermi-Dirac thermal velocities to WDM particles (`thermal.py`).
-6. Write the header, the input power spectrum and transfer tables and the particles
+5. Write the header, the input power spectrum and transfer tables and the particles
    (`Position`, `Velocity`, `ID`, `ICDensity`, `PrePosition`) as a BigFile (`save.py`).
 
 Parameters that only matter to the C code (`MaxMemSizePerNode`, `NumWriters`,
 `ShowBacktrace`, `PrimordialAmp`, `PrimordialRunning`) and the neutrino parameters
 (`MNue`, `MNum`, `MNut`, `NgridNu`, `Max_nuvel`, `Omega_ur`) are not accepted: as for any
 unknown parameter, pygenic stops with an error, so remove them from the parameter file.
-The same goes for `InvertPhase` (no paired simulations) and `UsePeculiarVelocity`:
+The same goes for `MWDM_therm` (no WDM thermal velocities; a WDM power spectrum
+still works), `InvertPhase` (no paired simulations) and `UsePeculiarVelocity`:
 velocities are always written as peculiar velocities `v = a dx/dt`, and the header
 says `UsePeculiarVelocity = 1` so that MP-Gadget reads them correctly.
 
 ## Differences from the C code
 
 * **Random phases.** The C code draws the Gaussian field with the N-GenIC GSL seed
-  table, and the glass and thermal velocities with GSL generators. pygenic uses numpy's
+  table, and the glass with a GSL generator. pygenic uses numpy's
   random number generator, so the same `Seed` gives a statistically equivalent but
   different realisation. Everything else that is deterministic agrees with the C code:
   the stored power and transfer tables, particle masses, IDs, unperturbed positions, the

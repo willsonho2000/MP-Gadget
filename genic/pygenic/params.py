@@ -31,7 +31,6 @@ SCHEMA = [
     ("w0_fld", float, OPTIONAL, -1., "Dark energy equation of state"),
     ("wa_fld", float, OPTIONAL, 0, "Dark energy evolution parameter"),
     ("CLASS_Radiation", int, OPTIONAL, 0, "If enabled, we enforce that sum(Omega_i) = 1."),
-    ("MWDM_therm", float, OPTIONAL, 0, "WDM particle mass in keV for thermal velocities."),
     ("DifferentTransferFunctions", int, OPTIONAL, 1, "Use species specific transfer functions for baryon and CDM."),
     ("ScaleDepVelocity", int, OPTIONAL, -1, "Use scale dependent velocity transfer functions."),
     ("FileWithTransferFunction", str, OPTIONAL, "", "File containing CLASS formatted transfer functions."),
@@ -132,7 +131,6 @@ def read_parameterfile(fname, verbose=True):
 
     redshift = ps["Redshift"]
     c = SimpleNamespace()
-    c.WDM_therm_mass = ps["MWDM_therm"]
     c.ProduceGas = ps["ProduceGas"]
     c.UnitVelocity_in_cm_per_s = ps["UnitVelocity_in_cm_per_s"]
     c.UnitLength_in_cm = ps["UnitLength_in_cm"]

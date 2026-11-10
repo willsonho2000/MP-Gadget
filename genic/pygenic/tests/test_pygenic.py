@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from pygenic import mesh, params, thermal, zeldovich
+from pygenic import mesh, params, zeldovich
 from pygenic.cosmology import Cosmology
 from pygenic.main import generate
 from pygenic.power import DELTA_TOT, PowerSpectrum
@@ -96,13 +96,6 @@ def test_sigma8_normalisation():
                            DifferentTransferFunctions=0, ScaleDepVelocity=0)
     power = PowerSpectrum(1.0, 3.085678e21, cosmo, ppar)
     assert math.sqrt(power.TopHatSigma2(8000.)) == pytest.approx(0.8, rel=1e-4)
-
-
-def test_thermal_velocity_distribution():
-    therm = thermal.ThermalVel(1.0, 17.0, 0)
-    vel = therm.add_thermal_speeds(np.random.default_rng(1), np.zeros((200000, 3)))
-    # <v> for a relativistic Fermi-Dirac distribution is 7 pi^4 / (180 zeta(3)) ~ 3.15
-    assert np.mean(np.linalg.norm(vel, axis=1)) == pytest.approx(7 * np.pi ** 4 / (180 * 1.2020569), rel=1e-2)
 
 
 def test_cic_paint_readout():
@@ -195,23 +188,12 @@ def test_gas_glass_and_transfer_functions(tmp_path):
     assert f["ICTransfers/DELTA_BAR"][:][-1] < f["ICTransfers/DELTA_CDM"][:][-1]
 
 
-def test_wdm_velocities_and_grid_center(tmp_path):
+def test_grid_center_and_header(tmp_path):
     bigfile = pytest.importorskip("bigfile")
-    base = "Sigma8 = 0.8\nPrePosGridCenter = 1\n"
-    paths = []
-    for i, extra in enumerate(["", "MWDM_therm = 0.1\n"]):
-        sub = tmp_path / str(i)
-        sub.mkdir()
-        paths.append(generate(write_params(sub, ngrid=8, extra=base + extra), verbose=False))
-    files = [bigfile.File(p) for p in paths]
-    box = files[0]["Header"].attrs["BoxSize"][0]
+    path = generate(write_params(tmp_path, ngrid=8, extra="Sigma8 = 0.8\nPrePosGridCenter = 1\n"),
+                    verbose=False)
+    f = bigfile.File(path)
+    box = f["Header"].attrs["BoxSize"][0]
     # Pre-displacement positions are at the grid cell centres
-    assert np.allclose(files[0]["1/PrePosition"][:][0], box / 8 / 2)
-
-    def disp(f):
-        return (f["1/Position"][:] - f["1/PrePosition"][:] + box / 2) % box - box / 2
-    # WDM thermal velocities are added on top of the same Zel'dovich velocities
-    extra = files[1]["1/Velocity"][:] - files[0]["1/Velocity"][:]
-    assert np.all(np.linalg.norm(extra, axis=1) > 0)
-    assert np.allclose(disp(files[0]), disp(files[1]))
-    assert files[0]["Header"].attrs["UsePeculiarVelocity"][0] == 1
+    assert np.allclose(f["1/PrePosition"][:][0], box / 8 / 2)
+    assert f["Header"].attrs["UsePeculiarVelocity"][0] == 1

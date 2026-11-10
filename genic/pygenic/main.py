@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from . import glass, save, thermal, zeldovich
+from . import glass, save, zeldovich
 from .cosmology import Cosmology
 from .params import read_parameterfile
 from .physconst import CM_PER_MPC, message
@@ -98,13 +98,6 @@ def generate(paramfile, verbose=True):
 
     if len(cdm) > 0:
         disp.displacement_fields(cdm, DMType, power, cosmo, config)
-        # Add a thermal velocity to WDM particles
-        if config.WDM_therm_mass > 0:
-            v_th = thermal.WDM_V0(config.TimeIC, config.WDM_therm_mass,
-                                  cosmo.OmegaCDM,
-                                  cosmo.HubbleParam, config.UnitVelocity_in_cm_per_s)
-            wdm = thermal.ThermalVel(v_th, 10000 / v_th, 0)
-            wdm.add_thermal_speeds(np.random.default_rng(config.Seed + 1), cdm.Vel)
         save.write_particle_data(bf, 1, cdm, idgen_cdm.ids(0), config.SavePrePos, config.NumFiles)
     del cdm
 
