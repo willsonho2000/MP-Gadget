@@ -15,6 +15,8 @@ HubbleParam = 0.669      # Hubble paramater (may be used for power spec paramete
 Redshift = 99        # Starting redshift
 
 DifferentTransferFunctions = 1
+PerturbMass = 1
+
 #Tabulated output in Mpc/h units.
 FileWithInputSpectrum = ../WDM_pk_99.dat  # filename of tabulated input spectrum (if used)
 #FileWithInputSpectrum = ../class_pk_99.dat  # filename of tabulated input spectrum (if used)
