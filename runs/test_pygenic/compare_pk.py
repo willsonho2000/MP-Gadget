@@ -12,23 +12,28 @@ OUT = sys.argv[4]
 import os
 LA = os.path.basename(os.path.dirname(A.rstrip("/")))
 LB = os.path.basename(os.path.dirname(B.rstrip("/")))
-NMESH = 128
+# A fine mesh with a TSC kernel. Cloud-in-cell on a mesh only twice as fine as the particle
+# grid responds differently to particle masses and to displacements, which biases the
+# gas-to-DM ratio of mass-perturbed ICs by a few per cent at half the particle Nyquist.
+NMESH = 256
+# Largest k shown, in units of the fundamental mode (twice the Nyquist of a 64^3 grid)
+KMAX = 64
 
 
-def cic(pos, box, n):
+def paint(pos, mass, box, n):
+    """Overdensity of particles with the given masses on an n^3 mesh (TSC assignment)."""
     x = (pos % box) / box * n
-    i0 = np.floor(x).astype(np.int64)
-    f = x - i0
+    i0 = np.rint(x).astype(np.int64)
+    d = x - i0
+    w = [0.5 * (0.5 - d) ** 2, 0.75 - d ** 2, 0.5 * (0.5 + d) ** 2]
+    mass = np.broadcast_to(mass, (len(pos),))
     rho = np.zeros(n ** 3)
-    for dx in (0, 1):
-        wx = f[:, 0] if dx else 1 - f[:, 0]
-        for dy in (0, 1):
-            wy = f[:, 1] if dy else 1 - f[:, 1]
-            for dz in (0, 1):
-                wz = f[:, 2] if dz else 1 - f[:, 2]
-                idx = (i0 + [dx, dy, dz]) % n
+    for a in range(3):
+        for b in range(3):
+            for c in range(3):
+                idx = (i0 + [a - 1, b - 1, c - 1]) % n
                 flat = (idx[:, 0] * n + idx[:, 1]) * n + idx[:, 2]
-                rho += np.bincount(flat, weights=wx * wy * wz, minlength=n ** 3)
+                rho += np.bincount(flat, weights=mass * w[a][:, 0] * w[b][:, 1] * w[c][:, 2], minlength=n ** 3)
     rho = rho.reshape((n,) * 3)
     return rho / rho.mean() - 1
 
@@ -38,13 +43,13 @@ def power(delta, box, n):
     kf = np.fft.fftfreq(n, d=1.0 / n)
     kz = np.fft.rfftfreq(n, d=1.0 / n)
     KX, KY, KZ = np.meshgrid(kf, kf, kz, indexing="ij")
-    # deconvolve CIC window
-    W = (np.sinc(KX / n) * np.sinc(KY / n) * np.sinc(KZ / n)) ** 2
+    # deconvolve TSC window
+    W = (np.sinc(KX / n) * np.sinc(KY / n) * np.sinc(KZ / n)) ** 3
     p = np.abs(dk / W) ** 2 * box ** 3
     kmag = np.sqrt(KX ** 2 + KY ** 2 + KZ ** 2)
     # rfft double counting: kz>0 and kz<n/2 count twice
     wt = np.where((KZ > 0) & (KZ < n / 2), 2.0, 1.0)
-    edges = np.arange(0.5, n / 2 + 1, 1.0)
+    edges = np.arange(0.5, min(n / 2, KMAX) + 1, 1.0)
     ib = np.digitize(kmag.ravel(), edges)
     nb = len(edges)
     cnt = np.bincount(ib, weights=wt.ravel(), minlength=nb + 1)[1:nb]
@@ -62,7 +67,9 @@ def measure(path):
     out, deltas, w = {}, {}, {}
     for pt in (0, 1):
         pos = f[f"{pt}/Position"][:]
-        d = cic(pos, box, NMESH)
+        # Mass-perturbed ICs have a mass for each particle; otherwise all are equal.
+        pmass = f[f"{pt}/Mass"][:].astype(float) if f"{pt}/Mass" in f.blocks else 1.0
+        d = paint(pos, pmass, box, NMESH)
         deltas[pt] = d
         w[pt] = mass[pt] * len(pos)
         out[pt] = power(d, box, NMESH)
@@ -139,7 +146,7 @@ for ax in (ax1, ax2):
     ax.axvline(knyq, color="gray", lw=0.8, ls=":")
 ax1.set_ylabel(r"$P(k)$ [(Mpc/h)$^3$]")
 ax1.legend(ncol=2, fontsize=8, frameon=False)
-ax1.set_title(f"IC power spectra, z=99, {box_mpc:g} Mpc/h, CIC {NMESH}³ (deconvolved)")
+ax1.set_title(f"IC power spectra, z=99, {box_mpc:g} Mpc/h, TSC {NMESH}³ (deconvolved)")
 ax2.axhline(1, color="gray", lw=0.8)
 ax2.set_ylabel(f"{LA} / {LB}")
 ax2.set_xlabel("k [h/Mpc]")

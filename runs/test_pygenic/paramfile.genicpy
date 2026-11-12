@@ -1,4 +1,4 @@
-OutputDir = ICS_ref_grid # Directory for output
+OutputDir = ICS_test # Directory for output
 FileBase = IC              # Base-filename of output files
 
 Ngrid = 64 # Size of cubic grid on which to create particles.
@@ -15,7 +15,7 @@ HubbleParam = 0.669      # Hubble paramater (may be used for power spec paramete
 Redshift = 99        # Starting redshift
 
 DifferentTransferFunctions = 1
-#PerturbMass = 1
+PerturbMass = 1
 MakeGlassGas = 0
 
 #Tabulated output in Mpc/h units.

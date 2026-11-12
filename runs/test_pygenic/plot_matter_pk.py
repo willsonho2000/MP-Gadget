@@ -197,7 +197,7 @@ def main():
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("ics", nargs="+", metavar="IC",
                         help="IC(s) to compare against the reference, e.g. ICS_grid")
-    parser.add_argument("--ref", default="ICS_ref/IC", help="reference IC (default: ICS_ref/IC)")
+    parser.add_argument("--ref", default="ICS_ref_grid/IC", help="reference IC (default: ICS_ref_grid/IC)")
     parser.add_argument("--nmesh", type=int, default=None,
                         help="mesh cells per side (default: 4 x the particle grid)")
     parser.add_argument("--ylim", type=float, nargs=2, metavar=("LO", "HI"), default=(0.8, 1.2),
