@@ -38,4 +38,5 @@ yyh_tests/
 # Simulation outputs (tens of GB). Files already committed stay tracked;
 # use `git add -f <file>` to commit a specific new result.
 runs/**/output/
+runs/**/theory/
 *.npz
